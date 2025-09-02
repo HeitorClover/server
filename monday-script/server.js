@@ -1,20 +1,30 @@
-// server.js — final (usa stop_time_tracking para "Tempo em Controle")
+// server.js — webhook handler para parar timers de subitems quando o status mudar
+// Única variável externa esperada: MONDAY_API_KEY
+// Porta padrão: process.env.PORT || 1000
+
 const express = require('express');
 const bodyParser = require('body-parser');
 const fetch = require('node-fetch');
 
 const app = express();
-app.use(bodyParser.json());
+app.use(bodyParser.json({ limit: '1mb' }));
 
-// CONFIG - sua API key
-const API_KEY = process.env.MONDAY_API_KEY || '<MISSING_KEY>';
+// --- CONFIG (apenas a API key fora do código) ---
+const API_KEY = process.env.MONDAY_API_KEY;
+if (!API_KEY) {
+  console.error('ERRO: MONDAY_API_KEY não definido nas variáveis de ambiente. Defina MONDAY_API_KEY e reinicie.');
+  process.exit(1);
+}
 
 // Identificador de boot (útil para confirmar novo deploy)
 const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
 
-// Colunas corretas (títulos)
+// Colunas corretas (títulos) — mantidos no código conforme solicitado
 const TIMER_COL_TITLE = 'Tempo em Controle';
 const DATE_COL_TITLE = 'Data de termino';
+
+// Se quiser alterar os status aceitos, altere aqui (mantido no código)
+const ACCEPT = ['prospecção', 'abertura de conta', 'montagem de dossiê', 'desistente/inativo'];
 
 // banner startup
 console.log('--------------------------------------------');
@@ -23,16 +33,21 @@ console.log(`BOOT_ID: ${BOOT_ID}`);
 console.log(`PID: ${process.pid}`);
 console.log('--------------------------------------------');
 
-// helper GraphQL
+// ---------- helper GraphQL (monday) ----------
 async function gql(query) {
   const r = await fetch('https://api.monday.com/v2', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: API_KEY },
     body: JSON.stringify({ query })
   });
-  const data = await r.json();
+  const data = await r.json().catch(e => {
+    console.error('Erro parseando resposta JSON do monday:', e);
+    throw e;
+  });
+
   if (data.errors) {
-    console.error('>> GraphQL ERROS DETECTADOS:', JSON.stringify(data.errors, null, 2));
+    console.warn('>> GraphQL ERROS DETECTADOS:', JSON.stringify(data.errors, null, 2));
+    // Não lançar sempre — deixa chamada chamadora decidir. Aqui lançamos pra facilitar debug.
     throw new Error('GraphQL error: ' + JSON.stringify(data.errors));
   }
   return data.data;
@@ -79,11 +94,17 @@ function findColumn(cols, title, expectedType) {
   }
   // fallback por tipo (quando título difere)
   if (expectedType) {
-    const byType = cols.find(c => c.type === expectedType);
+    const byType = cols.find(c => (c.type || '').toLowerCase().includes(String(expectedType || '').toLowerCase()));
     if (byType) {
       console.log(`> Encontrada coluna por tipo fallback: id=${byType.id} title="${byType.title}" type=${byType.type}`);
       return byType;
     }
+  }
+  // fallback por substring no título
+  const bySub = cols.find(c => (c.title || '').toLowerCase().includes((title || '').toLowerCase()));
+  if (bySub) {
+    console.log(`> Encontrada coluna por substring no título: id=${bySub.id} title="${bySub.title}" type=${bySub.type}`);
+    return bySub;
   }
   console.log(`> NÃO encontrou coluna title="${title}" type="${expectedType}"`);
   return null;
@@ -145,12 +166,24 @@ async function setTodayDate(subitemId, boardId, columnId) {
 async function processEvent(body) {
   console.log('--- processEvent body:', JSON.stringify(body, null, 2));
   const ev = body.event || {};
-  let statusText = ev.value?.label?.text || ev.columnTitle || '';
+
+  // tentar extrair status de várias formas
+  let statusText = '';
+  try {
+    statusText = ev.value?.label?.text || ev.value?.label || ev.columnTitle || ev.column_title || ev.payload?.value?.label || '';
+  } catch (e) {
+    statusText = '';
+  }
   statusText = String(statusText || '').trim();
   console.log('> status extraído:', statusText, 'BOOT_ID:', BOOT_ID);
 
-  const ACCEPT = ['prospecção', 'abertura de conta', 'montagem de dossiê', 'desistente/inativo'];
-  if (!ACCEPT.includes(statusText.toLowerCase())) {
+  if (!statusText) {
+    console.log('> Nenhum status extraído — saindo (filtro ativo).');
+    return;
+  }
+
+  // comparando em lowercase
+  if (!ACCEPT.map(s => s.toLowerCase()).includes(statusText.toLowerCase())) {
     console.log(`> Status "${statusText}" não é aceito — ignorando.`);
     return;
   }
@@ -159,7 +192,7 @@ async function processEvent(body) {
   const candidates = [
     ev.pulseId, ev.pulse_id, ev.itemId, ev.item_id,
     body.pulseId, body.pulse_id, body.itemId, body.item_id,
-    body.event?.itemId, body.event?.item_id
+    body.event?.itemId, body.event?.item_id, ev.payload?.itemId, ev.payload?.item_id
   ];
   const itemId = candidates.find(v => v && /^\d+$/.test(String(v)));
   if (!itemId) {
@@ -170,7 +203,7 @@ async function processEvent(body) {
 
   const subitems = await getSubitemsOfItem(Number(itemId));
   console.log(`> Encontrados ${subitems.length} subitems:`, subitems.map(s => ({ id: s.id, name: s.name })));
-  if (subitems.length === 0) return console.log('> Nenhum subitem — nada a atualizar.');
+  if (!subitems || subitems.length === 0) return console.log('> Nenhum subitem — nada a atualizar.');
 
   for (const s of subitems) {
     try {
@@ -206,8 +239,12 @@ async function processEvent(body) {
 // Rota webhook
 app.post('/webhook', (req, res) => {
   const body = req.body || {};
-  if (body.challenge) return res.status(200).json({ challenge: body.challenge });
-  res.sendStatus(200);
+  if (body.challenge) {
+    // monday exige retorno do challenge ao criar webhook
+    return res.status(200).json({ challenge: body.challenge });
+  }
+  // responder rápido e processar em background
+  res.status(200).json({ ok: true, boot: BOOT_ID });
   processEvent(body).catch(err => console.error('processEvent erro:', err));
 });
 
@@ -215,5 +252,6 @@ app.post('/webhook', (req, res) => {
 app.get('/', (_req, res) => res.send(`Servidor rodando — BOOT_ID: ${BOOT_ID}`));
 app.get('/health', (_req, res) => res.json({ status: 'ok', now: new Date().toISOString(), boot_id: BOOT_ID }));
 
-const PORT = process.env.PORT || 3000;
+// Porta: usa PORT do ambiente se houver (Render), senão 1000 por padrão
+const PORT = process.env.PORT || 1000;
 app.listen(PORT, () => console.log(`🚀 Server rodando na porta ${PORT} — BOOT_ID: ${BOOT_ID}`));
