@@ -1,4 +1,4 @@
-// server.js — webhook handler para setar a data de término nos subitens quando o status mudar
+// server.js — webhook handler para setar a data de FINALIZAÇÃO nos subitens quando o status mudar
 // Única variável externa esperada: MONDAY_API_KEY
 // Porta padrão: process.env.PORT || 1000
 
@@ -18,7 +18,7 @@ if (!API_KEY) {
 const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
 
 // Coluna de data (título esperado)
-const DATE_COL_TITLE = 'Data de termino';
+const DATE_COL_TITLE = 'FINALIZAÇÃO';
 
 // Status aceitos (somente os da imagem enviada)
 const ACCEPT = [
@@ -89,7 +89,7 @@ async function getSubitemBoardAndColumns(subitemId) {
   return { boardId: item.board.id, cols: item.board.columns || [] };
 }
 
-// Encontra coluna pelo título (case-insensitive)
+// Encontra coluna pelo título (case-insensitive) e tenta fallback por tipo/substring
 function findColumn(cols, title, expectedType) {
   console.log(`> Procurando coluna: title="${title}" expectedType="${expectedType}"`);
   if (!Array.isArray(cols)) return null;
@@ -100,6 +100,7 @@ function findColumn(cols, title, expectedType) {
       return c;
     }
   }
+  // fallback por tipo (quando título difere)
   if (expectedType) {
     const byType = cols.find(c => (c.type || '').toLowerCase().includes(String(expectedType || '').toLowerCase()));
     if (byType) {
@@ -107,6 +108,7 @@ function findColumn(cols, title, expectedType) {
       return byType;
     }
   }
+  // fallback por substring no título
   const bySub = cols.find(c => (c.title || '').toLowerCase().includes((title || '').toLowerCase()));
   if (bySub) {
     console.log(`> Encontrada coluna por substring no título: id=${bySub.id} title="${bySub.title}" type=${bySub.type}`);
@@ -116,7 +118,7 @@ function findColumn(cols, title, expectedType) {
   return null;
 }
 
-// Seta data para hoje (YYYY-MM-DD)
+// Seta data para hoje (YYYY-MM-DD) na coluna de FINALIZAÇÃO
 async function setTodayDate(subitemId, boardId, columnId) {
   const today = new Date().toISOString().split('T')[0];
   console.log(`> setTodayDate -> subitem ${subitemId}, date ${today}, board ${boardId}, column ${columnId}`);
@@ -148,6 +150,7 @@ async function processEvent(body) {
   console.log('--- processEvent body:', JSON.stringify(body, null, 2));
   const ev = body.event || {};
 
+  // tentar extrair status de várias formas
   let statusText = '';
   try {
     statusText = ev.value?.label?.text || ev.value?.label || ev.columnTitle || ev.column_title || ev.payload?.value?.label || '';
@@ -162,11 +165,13 @@ async function processEvent(body) {
     return;
   }
 
+  // checa se o status está na lista de aceitos (case-insensitive)
   if (!ACCEPT.map(s => s.toLowerCase()).includes(statusText.toLowerCase())) {
     console.log(`> Status "${statusText}" não é aceito — ignorando.`);
     return;
   }
 
+  // identificar itemId de várias possíveis chaves no payload
   const candidates = [
     ev.pulseId, ev.pulse_id, ev.itemId, ev.item_id,
     body.pulseId, body.pulse_id, body.itemId, body.item_id,
@@ -187,6 +192,7 @@ async function processEvent(body) {
     try {
       const { boardId, cols } = await getSubitemBoardAndColumns(s.id);
 
+      // localizar coluna de data FINALIZAÇÃO
       const dateCol = findColumn(cols, DATE_COL_TITLE, 'date');
 
       if (!dateCol) {
