@@ -1,7 +1,3 @@
-// server.js — webhook handler para setar a data de FINALIZAÇÃO nos subitens quando o status mudar
-// Única variável externa esperada: MONDAY_API_KEY
-// Porta padrão: process.env.PORT || 1000
-
 const express = require('express');
 const bodyParser = require('body-parser');
 const fetch = require('node-fetch');
@@ -17,10 +13,10 @@ if (!API_KEY) {
 
 const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
 
-// Coluna de data (título esperado)
+// Coluna de data
 const DATE_COL_TITLE = 'FINALIZAÇÃO';
 
-// Status aceitos (somente os da imagem enviada)
+// Status aceitos
 const ACCEPT = [
   'abrir conta',
   'comercial',
@@ -35,14 +31,12 @@ const ACCEPT = [
   'desist/demora'
 ];
 
-// banner startup
 console.log('--------------------------------------------');
 console.log(`STARTUP: ${new Date().toISOString()}`);
 console.log(`BOOT_ID: ${BOOT_ID}`);
 console.log(`PID: ${process.pid}`);
 console.log('--------------------------------------------');
 
-// ---------- helper GraphQL (monday) ----------
 async function gql(query) {
   const r = await fetch('https://api.monday.com/v2', {
     method: 'POST',
@@ -69,7 +63,7 @@ async function getSubitemsOfItem(itemId) {
   return data.items?.[0]?.subitems || [];
 }
 
-// Busca board + colunas do subitem
+// Busca colunas do subitem
 async function getSubitemBoardAndColumns(subitemId) {
   const q = `query {
     items(ids: ${subitemId}) {
@@ -89,7 +83,7 @@ async function getSubitemBoardAndColumns(subitemId) {
   return { boardId: item.board.id, cols: item.board.columns || [] };
 }
 
-// Encontra coluna pelo título (case-insensitive) e tenta fallback por tipo/substring
+// Encontra coluna
 function findColumn(cols, title, expectedType) {
   console.log(`> Procurando coluna: title="${title}" expectedType="${expectedType}"`);
   if (!Array.isArray(cols)) return null;
@@ -100,7 +94,7 @@ function findColumn(cols, title, expectedType) {
       return c;
     }
   }
-  // fallback por tipo (quando título difere)
+
   if (expectedType) {
     const byType = cols.find(c => (c.type || '').toLowerCase().includes(String(expectedType || '').toLowerCase()));
     if (byType) {
@@ -108,7 +102,7 @@ function findColumn(cols, title, expectedType) {
       return byType;
     }
   }
-  // fallback por substring no título
+
   const bySub = cols.find(c => (c.title || '').toLowerCase().includes((title || '').toLowerCase()));
   if (bySub) {
     console.log(`> Encontrada coluna por substring no título: id=${bySub.id} title="${bySub.title}" type=${bySub.type}`);
@@ -118,7 +112,7 @@ function findColumn(cols, title, expectedType) {
   return null;
 }
 
-// Seta data para hoje (YYYY-MM-DD) na coluna de FINALIZAÇÃO
+// Seta data para hoje na coluna de FINALIZAÇÃO
 async function setTodayDate(subitemId, boardId, columnId) {
   const today = new Date().toISOString().split('T')[0];
   console.log(`> setTodayDate -> subitem ${subitemId}, date ${today}, board ${boardId}, column ${columnId}`);
@@ -145,12 +139,11 @@ async function setTodayDate(subitemId, boardId, columnId) {
   }
 }
 
-// Processa evento (webhook)
+// Webhook
 async function processEvent(body) {
   console.log('--- processEvent body:', JSON.stringify(body, null, 2));
   const ev = body.event || {};
 
-  // tentar extrair status de várias formas
   let statusText = '';
   try {
     statusText = ev.value?.label?.text || ev.value?.label || ev.columnTitle || ev.column_title || ev.payload?.value?.label || '';
@@ -165,7 +158,7 @@ async function processEvent(body) {
     return;
   }
 
-  // checa se o status está na lista de aceitos (case-insensitive)
+  // checa se o status está na lista de aceitos
   if (!ACCEPT.map(s => s.toLowerCase()).includes(statusText.toLowerCase())) {
     console.log(`> Status "${statusText}" não é aceito — ignorando.`);
     return;
@@ -223,9 +216,8 @@ app.post('/webhook', (req, res) => {
   processEvent(body).catch(err => console.error('processEvent erro:', err));
 });
 
-// Health + root friendly
 app.get('/', (_req, res) => res.send(`Servidor rodando — BOOT_ID: ${BOOT_ID}`));
-app.get('/health', (_req, res) => res.json({ status: 'ok', now: new Date().toISOString(), boot_id: BOOT_ID }));
+app.get('/webhook', (_req, res) => res.json({ status: 'ok', now: new Date().toISOString(), boot_id: BOOT_ID }));
 
 const PORT = process.env.PORT || 1000;
 app.listen(PORT, () => console.log(`🚀 Server rodando na porta ${PORT} — BOOT_ID: ${BOOT_ID}`));
