@@ -28,7 +28,13 @@ const ACCEPT = [
   'conformidade',
   'avaliação',
   'conta ativa',
-  'desist/demora'
+  'desist/demora',
+  'aprovado',
+  'condicionado',
+  'reprovado',
+  'analise',
+  'engenharia',
+  'projetos'
 ];
 
 console.log('--------------------------------------------');
