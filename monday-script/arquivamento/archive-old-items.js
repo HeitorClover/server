@@ -23,7 +23,7 @@ const BOARD_IDS = rawBoardId
   .filter(Boolean);
 
 // DAYS e DRY_RUN
-const DAYS = Number(process.env.DAYS || 250);
+const DAYS = Number(process.env.DAYS || 200);
 const DRY_RUN = (process.env.DRY_RUN || 'true').toString().toLowerCase() === 'true';
 
 const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
