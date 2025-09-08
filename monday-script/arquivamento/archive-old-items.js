@@ -1,4 +1,5 @@
-// archive-old-items.js (atualizado: parseLastUpdated mais robusta)
+// archive-old-items.js (versão robusta)
+// Dependências: express, body-parser, node-fetch
 const express = require('express');
 const bodyParser = require('body-parser');
 const fetch = require('node-fetch');
@@ -53,92 +54,141 @@ async function gql(query, variables = {}) {
   return json.data;
 }
 
-// --- Helper: extrai data de "last updated" a partir de column_values ---
-function parseLastUpdated(colValues) {
-  // Versão mais robusta: tenta várias estratégias para extrair uma data válida
-  if (!Array.isArray(colValues) || colValues.length === 0) return null;
+// --- Parser robusto de data (aceita pt-BR month names, dd/mm/yyyy, ISO, value JSON, etc.) ---
+function parseDateTolerant(text) {
+  if (!text && text !== 0) return null;
+  const s = String(text).trim();
+  if (!s) return null;
 
-  // 1) procura explicitamente por coluna com id 'last_updated' ou tipo que contenha 'last_updated'
-  const explicit = colValues.find(
-    c => (c && (c.id === 'last_updated' || (c.type && typeof c.type === 'string' && c.type.includes('last_updated'))))
-  );
+  // map de abreviações pt-br para eng (3 letras)
+  const monthMap = {
+    'jan': 'Jan', 'fev': 'Feb', 'mar': 'Mar', 'abr': 'Apr', 'mai': 'May', 'jun': 'Jun',
+    'jul': 'Jul', 'ago': 'Aug', 'set': 'Sep', 'out': 'Oct', 'nov': 'Nov', 'dez': 'Dec'
+  };
 
+  // 1) ISO date yyyy-mm-dd or datetime
+  const isoMatch = s.match(/\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?)?/);
+  if (isoMatch) {
+    try {
+      const candidate = isoMatch[0].endsWith('Z') ? isoMatch[0] : isoMatch[0] + 'Z';
+      const d = new Date(candidate);
+      if (!isNaN(d)) return d;
+    } catch (e) {}
+  }
+
+  // 2) dd/mm/yyyy
+  const dm = s.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
+  if (dm) {
+    try {
+      const parts = dm[1].split('/');
+      const candidate = `${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}T00:00:00Z`;
+      const d = new Date(candidate);
+      if (!isNaN(d)) return d;
+    } catch (e) {}
+  }
+
+  // 3) MonthName dd, yyyy  (ex: mai 26, 2025 OR May 26, 2025)
+  const m = s.match(/([A-Za-zÀ-ú]{3,})\s+(\d{1,2}),\s*(\d{4})/);
+  if (m) {
+    try {
+      const mon3 = m[1].slice(0,3).toLowerCase();
+      const eng = monthMap[mon3] || (m[1].charAt(0).toUpperCase() + m[1].slice(1));
+      const candidate = `${eng} ${m[2]}, ${m[3]}`;
+      const d = new Date(candidate);
+      if (!isNaN(d)) return d;
+    } catch (e) {}
+  }
+
+  // 4) tentar extrair yyyy-mm-dd isolado
+  const ymd = s.match(/\d{4}-\d{2}-\d{2}/);
+  if (ymd) {
+    try {
+      const d = new Date(ymd[0] + 'T00:00:00Z');
+      if (!isNaN(d)) return d;
+    } catch (e) {}
+  }
+
+  // 5) tentativa direta (last resort)
+  const d2 = new Date(s);
+  if (!isNaN(d2)) return d2;
+
+  return null;
+}
+
+// --- Extrai a "last updated" a partir do item inteiro (item.updated_at + column_values) ---
+function parseLastUpdatedFromItem(item) {
+  // 1) item.updated_at preferencial
+  if (item && item.updated_at) {
+    const d = new Date(item.updated_at);
+    if (!isNaN(d)) return d;
+  }
+
+  // 2) procurar coluna explicitamente 'last_updated' primeiro
+  const cvs = Array.isArray(item.column_values) ? item.column_values : [];
+  const explicit = cvs.find(c => c && (c.id === 'last_updated' || (c.type && typeof c.type === 'string' && c.type.includes('last_updated'))));
   if (explicit) {
-    // updated_at quando disponível
+    // some LastUpdatedValue may include updated_at
     if (explicit.updated_at) {
       const d = new Date(explicit.updated_at);
       if (!isNaN(d)) return d;
     }
-    // texto (pode ser ISO ou outro formato)
     if (explicit.text) {
-      const d = new Date(explicit.text);
-      if (!isNaN(d)) return d;
+      const p = parseDateTolerant(explicit.text);
+      if (p) return p;
     }
   }
 
-  // 2) fallback: varre todas as column_values e tenta extrair tokens de data
-  for (const c of colValues) {
+  // 3) varrer todas as column_values e tentar extrair
+  for (const c of cvs) {
     if (!c) continue;
 
-    // se tiver updated_at
     if (c.updated_at) {
       const d = new Date(c.updated_at);
       if (!isNaN(d)) return d;
     }
 
     if (c.text) {
-      const t = String(c.text).trim();
-      if (!t) continue;
+      const p = parseDateTolerant(c.text);
+      if (p) return p;
+    }
 
-      // tenta ISO (YYYY-MM-DDTHH:MM:SS...)
-      const isoMatch = t.match(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z?/);
-      if (isoMatch) {
-        // garantir fuso UTC se não houver Z
-        const candidate = isoMatch[0].endsWith('Z') ? isoMatch[0] : isoMatch[0] + 'Z';
-        const d = new Date(candidate);
-        if (!isNaN(d)) return d;
+    if (c.value) {
+      // value pode ser JSON com date/datetime
+      try {
+        const val = JSON.parse(c.value);
+        if (val) {
+          const candidate = val.date || val.datetime || val.updated_at || val.timestamp || val.value;
+          if (candidate) {
+            const p = parseDateTolerant(candidate);
+            if (p) return p;
+          }
+        }
+      } catch (e) {
+        // não JSON: ignorar
       }
-
-      // tenta dd/mm/YYYY
-      const dmMatch = t.match(/\b(\d{2}\/\d{2}\/\d{4})\b/);
-      if (dmMatch) {
-        const parts = dmMatch[1].split('/');
-        const candidate = `${parts[2]}-${parts[1]}-${parts[0]}T00:00:00Z`;
-        const d = new Date(candidate);
-        if (!isNaN(d)) return d;
-      }
-
-      // tenta extrair só a parte YYYY-MM-DD
-      const ymd = t.match(/\d{4}-\d{2}-\d{2}/);
-      if (ymd) {
-        const d = new Date(ymd[0] + 'T00:00:00Z');
-        if (!isNaN(d)) return d;
-      }
-
-      // por fim, tenta parse direto
-      const d2 = new Date(t);
-      if (!isNaN(d2)) return d2;
     }
   }
 
-  // nada válido encontrado
+  // nada encontrado
   return null;
 }
 
-// --- Pegar uma "página" de itens ---
-async function processPage(cursor) {
+// --- Consulta uma "página" de um board específico ---
+async function processBoardPage(boardId, cursor) {
   const qFirst = `
-    query ($boardIds: [ID!]!, $limit: Int!) {
-      boards(ids: $boardIds) {
+    query ($boardId: Int!, $limit: Int!) {
+      boards(ids: [$boardId]) {
         items_page(limit: $limit) {
           cursor
           items {
             id
             name
+            updated_at
             column_values {
               id
               text
               type
+              value
               ... on LastUpdatedValue { updated_at updater_id }
             }
           }
@@ -153,18 +203,19 @@ async function processPage(cursor) {
         items {
           id
           name
+          updated_at
           column_values {
             id
             text
             type
+            value
             ... on LastUpdatedValue { updated_at updater_id }
           }
         }
       }
     }`;
 
-  const vars = cursor ? { cursor, limit: 200 } : { boardIds: BOARD_IDS, limit: 200 };
-
+  const vars = cursor ? { cursor, limit: 200 } : { boardId: Number(boardId), limit: 200 };
   const data = await gql(cursor ? qNext : qFirst, vars);
 
   if (cursor) {
@@ -181,52 +232,65 @@ async function archiveItem(itemId) {
   return gql(mutation, { itemId });
 }
 
-// --- Rotina principal ---
+// --- Rotina principal: varre cada board separadamente ---
 async function runArchive() {
   console.log('>>> runArchive INICIADO às', new Date().toISOString());
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - DAYS);
 
-  let cursor = null;
-  let page = 1;
   let totalArchived = 0;
 
-  while (true) {
-    console.log(`> Processando página ${page}...`);
-    let res;
-    try {
-      res = await processPage(cursor);
-    } catch (err) {
-      console.error('Erro ao buscar página:', err);
-      break;
-    }
-    if (!res) {
-      console.log('> Sem mais páginas / sem itens retornados.');
-      break;
-    }
+  for (const boardId of BOARD_IDS) {
+    console.log(`-- Processando board ${boardId} --`);
+    let cursor = null;
+    let page = 1;
 
-    const items = res.items || [];
-    for (const it of items) {
-      const last = parseLastUpdated(it.column_values);
-      if (last && last < cutoff) {
-        console.log(`[CANDIDATO] ${it.id} "${it.name}" — last=${last.toISOString()}`);
-        if (!DRY_RUN) {
-          try {
-            await archiveItem(Number(it.id));
-            console.log(`[ARQUIVADO] ${it.id}`);
-            totalArchived++;
-            await new Promise(r => setTimeout(r, 200));
-          } catch (err) {
-            console.error(`[ERRO AO ARQUIVAR] ${it.id}:`, err);
+    while (true) {
+      console.log(`> Board ${boardId} — processando página ${page}...`);
+      let res;
+      try {
+        res = await processBoardPage(boardId, cursor);
+      } catch (err) {
+        console.error(`Erro ao buscar página (board ${boardId}):`, err);
+        break;
+      }
+      if (!res) {
+        console.log(`> Board ${boardId}: sem mais páginas / sem itens retornados.`);
+        break;
+      }
+
+      const items = res.items || [];
+      console.log(`> Board ${boardId} — itens nesta página: ${items.length}`);
+
+      for (const it of items) {
+        const last = parseLastUpdatedFromItem(it);
+        if (!last) {
+          console.log(`[SEM DATA] ${it.id} "${it.name}" — column_values: ${JSON.stringify(it.column_values || []).slice(0,200)}`);
+          continue;
+        }
+
+        if (last < cutoff) {
+          console.log(`[CANDIDATO] ${it.id} "${it.name}" — last=${last.toISOString()}`);
+          if (!DRY_RUN) {
+            try {
+              await archiveItem(Number(it.id));
+              console.log(`[ARQUIVADO] ${it.id}`);
+              totalArchived++;
+              // pequeno delay entre arquivamentos pra evitar throttling
+              await new Promise(r => setTimeout(r, 200));
+            } catch (err) {
+              console.error(`[ERRO AO ARQUIVAR] ${it.id}:`, err);
+            }
           }
         }
       }
-    }
 
-    cursor = res.cursor;
-    if (!cursor) break;
-    page++;
-    await new Promise(r => setTimeout(r, 300));
+      cursor = res.cursor;
+      if (!cursor) break;
+      page++;
+      // pequeno delay entre páginas para evitar throttling
+      await new Promise(r => setTimeout(r, 300));
+    }
   }
 
   console.log(`>>> runArchive FINALIZADO. Total arquivado: ${totalArchived}`);
@@ -237,12 +301,12 @@ async function runArchive() {
 app.get('/', (_req, res) => res.send(`Servidor rodando — BOOT_ID: ${BOOT_ID}`));
 
 app.post('/archive', (_req, res) => {
+  // responde imediatamente e roda o processo em background
   res.json({ ok: true, boot: BOOT_ID, dryRun: DRY_RUN, started: new Date().toISOString() });
 
-  // roda em background
   runArchive()
-    .then(() => console.log(">>> runArchive concluído sem erros"))
-    .catch(err => console.error("Erro em runArchive:", err));
+    .then(() => console.log('>>> runArchive concluído sem erros'))
+    .catch(err => console.error('Erro em runArchive:', err));
 });
 
 // --- Start server ---
