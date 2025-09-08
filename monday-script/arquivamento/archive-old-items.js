@@ -78,8 +78,6 @@ function parseLastUpdated(colValues) {
 }
 
 // --- Pegar uma "página" de itens ---
-// Usamos boards(ids: $boardIds) { items_page(limit: $limit) { cursor items { ... } } }
-// e next_items_page(cursor: $cursor, limit: $limit) para paginação
 async function processPage(cursor) {
   const qFirst = `
     query ($boardIds: [ID!]!, $limit: Int!) {
@@ -93,7 +91,6 @@ async function processPage(cursor) {
               id
               text
               type
-              # tentativa de pegar campo updated_at quando for LastUpdatedValue
               ... on LastUpdatedValue { updated_at updater_id }
             }
           }
@@ -125,7 +122,6 @@ async function processPage(cursor) {
   if (cursor) {
     return data && data.next_items_page ? data.next_items_page : null;
   } else {
-    // data.boards pode ser array vazio por algum motivo; garantir safe access
     if (!data || !Array.isArray(data.boards) || data.boards.length === 0) return null;
     return data.boards[0].items_page;
   }
@@ -137,9 +133,9 @@ async function archiveItem(itemId) {
   return gql(mutation, { itemId });
 }
 
-// --- Rotina principal de varredura e arquivamento ---
+// --- Rotina principal ---
 async function runArchive() {
-  console.log('=== Iniciando varredura para arquivar itens velhos ===');
+  console.log('>>> runArchive INICIADO às', new Date().toISOString());
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - DAYS);
 
@@ -171,7 +167,6 @@ async function runArchive() {
             await archiveItem(Number(it.id));
             console.log(`[ARQUIVADO] ${it.id}`);
             totalArchived++;
-            // pequeno delay para evitar throttling
             await new Promise(r => setTimeout(r, 200));
           } catch (err) {
             console.error(`[ERRO AO ARQUIVAR] ${it.id}:`, err);
@@ -183,25 +178,23 @@ async function runArchive() {
     cursor = res.cursor;
     if (!cursor) break;
     page++;
-    // pequeno delay entre páginas
     await new Promise(r => setTimeout(r, 300));
   }
 
-  console.log(`=== Fim da varredura. Total arquivado: ${totalArchived} ===`);
+  console.log(`>>> runArchive FINALIZADO. Total arquivado: ${totalArchived}`);
   return totalArchived;
 }
 
 // --- Rotas HTTP ---
 app.get('/', (_req, res) => res.send(`Servidor rodando — BOOT_ID: ${BOOT_ID}`));
 
-app.post('/archive', async (_req, res) => {
-  // responde imediatamente (fire-and-forget) e roda o processo em background
+app.post('/archive', (_req, res) => {
   res.json({ ok: true, boot: BOOT_ID, dryRun: DRY_RUN, started: new Date().toISOString() });
-  try {
-    await runArchive();
-  } catch (err) {
-    console.error('Erro em runArchive:', err);
-  }
+
+  // roda em background
+  runArchive()
+    .then(() => console.log(">>> runArchive concluído sem erros"))
+    .catch(err => console.error("Erro em runArchive:", err));
 });
 
 // --- Start server ---
