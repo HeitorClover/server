@@ -16,7 +16,7 @@ if (!API_KEY) {
 const rawBoardId = process.env.BOARD_ID || '7991681616';
 const BOARD_IDS = rawBoardId.toString().split(',').map(s => s.trim()).filter(Boolean);
 
-const DAYS = Number(process.env.DAYS || 202); // cutoff em dias
+const DAYS = Number(process.env.DAYS || 202);
 const DRY_RUN = (process.env.DRY_RUN || 'false').toLowerCase() === 'false';
 const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
 
@@ -149,8 +149,9 @@ async function processBoardPage(boardId, cursor) {
 
 // --- Arquiva item ---
 async function archiveItem(itemId) {
-  const mutation = `mutation ($itemId: Int!) { archive_item(item_id: $itemId) { id } }`;
-  return gql(mutation, { itemId });
+  // Envia como ID! (string) para evitar problemas com IDs grandes
+  const mutation = `mutation ($itemId: ID!) { archive_item(item_id: $itemId) { id } }`;
+  return gql(mutation, { itemId: itemId.toString() });
 }
 
 // --- Rotina principal ---
@@ -181,7 +182,7 @@ async function runArchive() {
           console.log(`[CANDIDATO] ${it.id} "${it.name}" — last=${last.toISOString()}`);
           if (!DRY_RUN) {
             try {
-              await archiveItem(Number(it.id));
+              await archiveItem(it.id); // <--- corrigido para string
               console.log(`[ARQUIVADO] ${it.id}`);
               totalArchived++;
               await new Promise(r => setTimeout(r, 200));
