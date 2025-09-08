@@ -24,7 +24,7 @@ const BOARD_IDS = rawBoardId
   .filter(Boolean);
 
 // DAYS e DRY_RUN
-const DAYS = Number(process.env.DAYS || 100);
+const DAYS = Number(process.env.DAYS || 202);
 const DRY_RUN = (process.env.DRY_RUN || 'true').toString().toLowerCase() === 'true';
 
 const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
@@ -312,3 +312,4 @@ app.post('/archive', (_req, res) => {
 // --- Start server ---
 const PORT = process.env.PORT || 1000;
 app.listen(PORT, () => console.log(`🚀 Server rodando na porta ${PORT} — BOOT_ID: ${BOOT_ID}`));
+
