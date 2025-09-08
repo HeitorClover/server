@@ -1,4 +1,4 @@
-// archive-old-items.js (limpa, DAYS = 202, log normal de todos os candidatos)
+// archive-old-items-list-and-archive.js
 const express = require('express');
 const bodyParser = require('body-parser');
 const fetch = require('node-fetch');
@@ -6,7 +6,7 @@ const fetch = require('node-fetch');
 const app = express();
 app.use(bodyParser.json({ limit: '1mb' }));
 
-// --- Config via env ---
+// --- Config ---
 const API_KEY = process.env.MONDAY_API_KEY;
 if (!API_KEY) {
   console.error('ERRO: MONDAY_API_KEY não definido.');
@@ -14,14 +14,10 @@ if (!API_KEY) {
 }
 
 const rawBoardId = process.env.BOARD_ID || '7991681616';
-const BOARD_IDS = rawBoardId
-  .toString()
-  .split(',')
-  .map(s => s.trim())
-  .filter(Boolean);
+const BOARD_IDS = rawBoardId.toString().split(',').map(s => s.trim()).filter(Boolean);
 
-const DAYS = 202; // itens com última atualização anterior a 202 dias atrás são candidatos
-const DRY_RUN = (process.env.DRY_RUN || 'true').toString().toLowerCase() === 'true';
+const DAYS = Number(process.env.DAYS || 202); // cutoff em dias
+const DRY_RUN = (process.env.DRY_RUN || 'false').toLowerCase() === 'false';
 const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
 
 console.log('--------------------------------------------');
@@ -39,7 +35,6 @@ async function gql(query, variables = {}) {
     headers: { 'Content-Type': 'application/json', Authorization: API_KEY },
     body: JSON.stringify({ query, variables }),
   });
-
   const json = await resp.json();
   if (json.errors) throw new Error('GraphQL error: ' + JSON.stringify(json.errors));
   return json.data;
@@ -52,22 +47,19 @@ function parseDateTolerant(text) {
   if (!s) return null;
 
   const monthMap = {
-    'jan': 'Jan', 'fev': 'Feb', 'mar': 'Mar', 'abr': 'Apr', 'mai': 'May', 'jun': 'Jun',
-    'jul': 'Jul', 'ago': 'Aug', 'set': 'Sep', 'out': 'Oct', 'nov': 'Nov', 'dez': 'Dec'
+    'jan':'Jan','fev':'Feb','mar':'Mar','abr':'Apr','mai':'May','jun':'Jun',
+    'jul':'Jul','ago':'Aug','set':'Sep','out':'Oct','nov':'Nov','dez':'Dec'
   };
 
-  // ISO
   const isoMatch = s.match(/\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}:\d{2}(?:\.\d+)?)?/);
   if (isoMatch) return new Date(isoMatch[0] + (isoMatch[0].endsWith('Z') ? '' : 'Z'));
 
-  // dd/mm/yyyy
   const dm = s.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
   if (dm) {
     const parts = dm[1].split('/');
     return new Date(`${parts[2]}-${parts[1].padStart(2,'0')}-${parts[0].padStart(2,'0')}T00:00:00Z`);
   }
 
-  // MonthName dd, yyyy
   const m = s.match(/([A-Za-zÀ-ú]{3,})\s+(\d{1,2}),\s*(\d{4})/);
   if (m) {
     const mon3 = m[1].slice(0,3).toLowerCase();
@@ -75,10 +67,8 @@ function parseDateTolerant(text) {
     return new Date(`${eng} ${m[2]}, ${m[3]}`);
   }
 
-  // fallback
   const d2 = new Date(s);
   if (!isNaN(d2)) return d2;
-
   return null;
 }
 
@@ -107,7 +97,7 @@ function parseLastUpdatedFromItem(item) {
   return null;
 }
 
-// --- Processa uma página de board ---
+// --- Consulta uma página ---
 async function processBoardPage(boardId, cursor) {
   const qFirst = `
     query ($boardId: ID!, $limit: Int!) {
@@ -168,6 +158,7 @@ async function runArchive() {
   console.log('>>> runArchive INICIADO às', new Date().toISOString());
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - DAYS);
+
   let totalArchived = 0;
 
   for (const boardId of BOARD_IDS) {
@@ -180,7 +171,7 @@ async function runArchive() {
       let res;
       try { res = await processBoardPage(boardId, cursor); } 
       catch (err) { console.error(`Erro ao buscar página (board ${boardId}):`, err); break; }
-      if (!res) { console.log(`> Board ${boardId}: sem mais páginas / sem itens retornados.`); break; }
+      if (!res) { console.log(`> Board ${boardId}: sem mais páginas.`); break; }
 
       const items = res.items || [];
       for (const it of items) {
@@ -189,10 +180,14 @@ async function runArchive() {
         if (last < cutoff) {
           console.log(`[CANDIDATO] ${it.id} "${it.name}" — last=${last.toISOString()}`);
           if (!DRY_RUN) {
-            await archiveItem(Number(it.id));
-            console.log(`[ARQUIVADO] ${it.id}`);
-            totalArchived++;
-            await new Promise(r => setTimeout(r, 200));
+            try {
+              await archiveItem(Number(it.id));
+              console.log(`[ARQUIVADO] ${it.id}`);
+              totalArchived++;
+              await new Promise(r => setTimeout(r, 200));
+            } catch (err) {
+              console.error(`[ERRO AO ARQUIVAR] ${it.id}:`, err);
+            }
           }
         }
       }
