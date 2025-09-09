@@ -16,8 +16,9 @@ const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
 // Coluna de data
 const DATE_COL_TITLE = 'FINALIZAÇÃO';
 
-// Status aceitos
+// Status aceitos (já existentes + novos das imagens)
 const ACCEPT = [
+  // Já existentes
   'abrir conta',
   'comercial',
   'documentos',
@@ -34,7 +35,23 @@ const ACCEPT = [
   'reprovado',
   'analise',
   'engenharia',
-  'projetos'
+  'projetos',
+
+  // Novos da imagem 1
+  'pago',
+  'não pago',
+
+  // Novos da imagem 2
+  'projetos',
+  'escritura',
+  'ab matricula',
+  'alvará',
+  'pci',
+  'o.s concluida',
+  'proj aprovado',
+  'engenharia',
+  'unificação',
+  'desmembramento'
 ];
 
 console.log('--------------------------------------------');
