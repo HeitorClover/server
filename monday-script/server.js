@@ -121,6 +121,49 @@ async function setTodayDate(subitemId, boardId, columnId) {
   }
 }
 
+// --- NOVA FUNÇÃO: Atribui o creator à coluna RESPONSÁVEL do subitem
+async function assignCreatorToSubitem(subitemId, boardId, cols) {
+  try {
+    // procura coluna RESPONSÁVEL entre as colunas do board do subitem
+    const responsibleCol = findColumn(cols, 'RESPONSÁVEL', 'people') || findColumn(cols, 'Responsável', 'people') || findColumn(cols, 'responsável', 'people');
+    if (!responsibleCol) {
+      console.warn(`> Coluna "RESPONSÁVEL" não encontrada no board do subitem ${subitemId}. Pulando atribuição.`);
+      return;
+    }
+
+    // pega o creator do subitem
+    const q = `query { items(ids: ${subitemId}) { id creator { id } } }`;
+    const data = await gql(q);
+    const creatorId = data.items?.[0]?.creator?.id;
+    if (!creatorId) {
+      console.warn(`> Creator não encontrado para subitem ${subitemId}. Pulando atribuição.`);
+      return;
+    }
+
+    // monta value para coluna people
+    const value = `{\\"personsAndTeams\\":[{\\"id\\":${creatorId},\\"kind\\":\\"person\\"}]}`;
+
+    const mutation = `mutation {
+      change_column_value(
+        board_id: ${boardId},
+        item_id: ${subitemId},
+        column_id: "${responsibleCol.id}",
+        value: "${value}"
+      ) { id }
+    }`;
+
+    const res = await fetch('https://api.monday.com/v2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: API_KEY },
+      body: JSON.stringify({ query: mutation })
+    });
+    const json = await res.json();
+    console.log(`> assignCreatorToSubitem result for ${subitemId}:`, JSON.stringify(json, null, 2));
+  } catch (err) {
+    console.error(`> Erro ao atribuir creator ao subitem ${subitemId}:`, err && err.message ? err.message : err);
+  }
+}
+
 // Processa webhook
 async function processEvent(body) {
   const ev = body.event || {};
@@ -152,6 +195,9 @@ async function processEvent(body) {
     if (!dateCol) return console.warn(`> Coluna de data "${DATE_COL_TITLE}" não encontrada para subitem ${lastSubitem.id}`);
     await setTodayDate(lastSubitem.id, boardId, dateCol.id);
     console.log(`> Data atualizada apenas para o último subitem ${lastSubitem.id}`);
+
+    // --- chamada da nova automação: atribui creator à coluna RESPONSÁVEL do subitem
+    await assignCreatorToSubitem(lastSubitem.id, boardId, cols);
   } catch (err) {
     console.error(`> Erro ao processar subitem ${lastSubitem.id}:`, err && err.message ? err.message : err);
   }
