@@ -1,3 +1,4 @@
+// serve.js
 const express = require('express');
 const bodyParser = require('body-parser');
 const fetch = require('node-fetch');
@@ -135,18 +136,31 @@ function findColumn(cols, title, expectedType) {
   return null;
 }
 
-// Seta data para hoje na coluna de FINALIZAÇÃO
+// Seta data + hora atual na coluna de FINALIZAÇÃO
 async function setTodayDate(subitemId, boardId, columnId) {
-  const today = new Date().toISOString().split('T')[0];
-  console.log(`> setTodayDate -> subitem ${subitemId}, date ${today}, board ${boardId}, column ${columnId}`);
+  const now = new Date();
+
+  // Formata data YYYY-MM-DD
+  const date = now.toISOString().split('T')[0];
+
+  // Formata hora HH:MM:SS (pad com zeros quando necessário)
+  const pad = n => String(n).padStart(2, '0');
+  const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+  console.log(`> setTodayDate -> subitem ${subitemId}, date ${date}, time ${time}, board ${boardId}, column ${columnId}`);
+
+  // o monday espera um JSON stringificado com { "date": "...", "time": "..." }
+  const valueJson = JSON.stringify({ date, time });
+
   const mutation = `mutation {
     change_column_value(
       board_id: ${boardId},
       item_id: ${subitemId},
       column_id: "${columnId}",
-      value: "{\\"date\\":\\"${today}\\"}"
+      value: "${valueJson.replace(/"/g, '\\"')}"
     ) { id }
   }`;
+
   try {
     const res = await fetch('https://api.monday.com/v2', {
       method: 'POST',
@@ -157,7 +171,7 @@ async function setTodayDate(subitemId, boardId, columnId) {
     console.log(`> setTodayDate result for ${subitemId}:`, JSON.stringify(json, null, 2));
     return json;
   } catch (err) {
-    console.error(`> Erro ao setar data para ${subitemId}:`, err && err.message ? err.message : err);
+    console.error(`> Erro ao setar data/hora para ${subitemId}:`, err && err.message ? err.message : err);
     throw err;
   }
 }
@@ -232,6 +246,7 @@ app.post('/webhook', (req, res) => {
   const body = req.body || {};
   if (body.challenge) {
     // monday exige retorno do challenge ao criar webhook
+    console.log('> Respondendo challenge do monday');
     return res.status(200).json({ challenge: body.challenge });
   }
   // responder rápido e processar em background
