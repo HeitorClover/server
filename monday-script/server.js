@@ -22,7 +22,8 @@ const ACCEPT = [
   'abrir conta','comercial','documentos','caixaaqui','doc pendente','assinatura','restrição',
   'conformidade','avaliação','conta ativa','desist/demora','aprovado','condicionado','reprovado',
   'analise','engenharia','projetos','projetos','escritura','ab matricula','alvará',
-  'pci','o.s concluida','proj aprovado','engenharia','unificação','desmembramento','concluido','siopi','solicitada'
+  'pci','o.s concluida','proj aprovado','engenharia','unificação','desmembramento','concluido','siopi','solicitada','assinatura',
+  'enviar conformidade', 'conformidade' , 'conforme'
 ];
 
 console.log('--------------------------------------------');
