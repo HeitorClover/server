@@ -17,7 +17,7 @@ const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
 // Coluna de data
 const DATE_COL_TITLE = 'FINALIZAÇÃO';
 
-// Status aceitos (já existentes + novos das imagens)
+// Status aceitos
 const ACCEPT = [
   'abrir conta','comercial','documentos','caixaaqui','doc pendente','assinatura','restrição',
   'conformidade','avaliação','conta ativa','desist/demora','aprovado','condicionado','reprovado',
@@ -123,17 +123,17 @@ async function setTodayDate(subitemId, boardId, columnId) {
   }
 }
 
-// --- NOVA FUNÇÃO: Atribui o creator à coluna RESPONSÁVEL do subitem
+// --- Automação existente: atribui o creator à coluna RESPONSÁVEL do subitem
 async function assignCreatorToSubitem(subitemId, boardId, cols) {
   try {
-    // procura coluna RESPONSÁVEL entre as colunas do board do subitem
-    const responsibleCol = findColumn(cols, 'RESPONSÁVEL', 'people') || findColumn(cols, 'Responsável', 'people') || findColumn(cols, 'responsável', 'people');
+    const responsibleCol = findColumn(cols, 'RESPONSÁVEL', 'people') ||
+                           findColumn(cols, 'Responsável', 'people') ||
+                           findColumn(cols, 'responsável', 'people');
     if (!responsibleCol) {
       console.warn(`> Coluna "RESPONSÁVEL" não encontrada no board do subitem ${subitemId}. Pulando atribuição.`);
       return;
     }
 
-    // pega o creator do subitem
     const q = `query { items(ids: ${subitemId}) { id creator { id } } }`;
     const data = await gql(q);
     const creatorId = data.items?.[0]?.creator?.id;
@@ -142,7 +142,6 @@ async function assignCreatorToSubitem(subitemId, boardId, cols) {
       return;
     }
 
-    // monta value para coluna people
     const value = `{\\"personsAndTeams\\":[{\\"id\\":${creatorId},\\"kind\\":\\"person\\"}]}`;
 
     const mutation = `mutation {
@@ -163,6 +162,41 @@ async function assignCreatorToSubitem(subitemId, boardId, cols) {
     console.log(`> assignCreatorToSubitem result for ${subitemId}:`, JSON.stringify(json, null, 2));
   } catch (err) {
     console.error(`> Erro ao atribuir creator ao subitem ${subitemId}:`, err && err.message ? err.message : err);
+  }
+}
+
+// --- NOVA FUNÇÃO: atribui usuário fixo (Henrique) se status = proj aprovado
+async function assignFixedUserToSubitem(subitemId, boardId, cols, userId) {
+  try {
+    const responsibleCol = findColumn(cols, 'RESPONSÁVEL', 'people') ||
+                           findColumn(cols, 'Responsável', 'people') ||
+                           findColumn(cols, 'responsável', 'people');
+    if (!responsibleCol) {
+      console.warn(`> Coluna "RESPONSÁVEL" não encontrada no subitem ${subitemId}`);
+      return;
+    }
+
+    const value = { personsAndTeams: [{ id: Number(userId), kind: "person" }] };
+    const valueStr = JSON.stringify(value).replace(/"/g, '\\"');
+
+    const mutation = `mutation {
+      change_column_value(
+        board_id: ${boardId},
+        item_id: ${subitemId},
+        column_id: "${responsibleCol.id}",
+        value: "${valueStr}"
+      ) { id }
+    }`;
+
+    const res = await fetch('https://api.monday.com/v2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: API_KEY },
+      body: JSON.stringify({ query: mutation })
+    });
+    const json = await res.json();
+    console.log(`> assignFixedUserToSubitem result for ${subitemId}:`, JSON.stringify(json, null, 2));
+  } catch (err) {
+    console.error(`> Erro ao atribuir usuário fixo no subitem ${subitemId}:`, err);
   }
 }
 
@@ -198,8 +232,14 @@ async function processEvent(body) {
     await setTodayDate(lastSubitem.id, boardId, dateCol.id);
     console.log(`> Data atualizada apenas para o último subitem ${lastSubitem.id}`);
 
-    // --- chamada da nova automação: atribui creator à coluna RESPONSÁVEL do subitem
+    // Automação existente
     await assignCreatorToSubitem(lastSubitem.id, boardId, cols);
+
+    // NOVA automação: se status = proj aprovado
+    if (statusText.toLowerCase() === 'proj aprovado') {
+      await assignFixedUserToSubitem(lastSubitem.id, boardId, cols, 69279625); // Henrique
+      console.log(`> Usuário Henrique atribuído ao subitem ${lastSubitem.id} (proj aprovado)`);
+    }
   } catch (err) {
     console.error(`> Erro ao processar subitem ${lastSubitem.id}:`, err && err.message ? err.message : err);
   }
