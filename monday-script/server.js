@@ -123,7 +123,7 @@ async function setTodayDate(subitemId, boardId, columnId) {
   }
 }
 
-// --- Automação existente: atribui o creator à coluna RESPONSÁVEL do subitem
+// Automação existente: atribui o creator à coluna RESPONSÁVEL do subitem
 async function assignCreatorToSubitem(subitemId, boardId, cols) {
   try {
     const responsibleCol = findColumn(cols, 'RESPONSÁVEL', 'people') ||
@@ -165,7 +165,7 @@ async function assignCreatorToSubitem(subitemId, boardId, cols) {
   }
 }
 
-// --- NOVA FUNÇÃO: atribui usuário fixo (Henrique) se status = proj aprovado
+// Nova função: atribui Henrique ao subitem
 async function assignFixedUserToSubitem(subitemId, boardId, cols, userId) {
   try {
     const responsibleCol = findColumn(cols, 'RESPONSÁVEL', 'people') ||
@@ -235,10 +235,14 @@ async function processEvent(body) {
     // Automação existente
     await assignCreatorToSubitem(lastSubitem.id, boardId, cols);
 
-    // NOVA automação: se status = proj aprovado
+    // Nova automação: se status = proj aprovado, aguarda 1 min antes de atribuir Henrique
     if (statusText.toLowerCase() === 'proj aprovado') {
-      await assignFixedUserToSubitem(lastSubitem.id, boardId, cols, 69279625); // Henrique
-      console.log(`> Usuário Henrique atribuído ao subitem ${lastSubitem.id} (proj aprovado)`);
+      console.log(`> Atribuição de Henrique agendada para daqui a 1 minuto no subitem ${lastSubitem.id}`);
+      (async () => {
+        await new Promise(res => setTimeout(res, 60 * 1000)); // delay de 1 minuto
+        await assignFixedUserToSubitem(lastSubitem.id, boardId, cols, 69279625); // Henrique
+        console.log(`> Usuário Henrique atribuído ao subitem ${lastSubitem.id} (proj aprovado)`);
+      })();
     }
   } catch (err) {
     console.error(`> Erro ao processar subitem ${lastSubitem.id}:`, err && err.message ? err.message : err);
