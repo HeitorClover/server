@@ -123,7 +123,7 @@ async function setTodayDate(subitemId, boardId, columnId) {
   }
 }
 
-// Automação existente: atribui o creator à coluna RESPONSÁVEL do subitem
+// Automação existente: atribui o creator à coluna RESPONSÁVEL
 async function assignCreatorToSubitem(subitemId, boardId, cols) {
   try {
     const responsibleCol = findColumn(cols, 'RESPONSÁVEL', 'people') ||
@@ -165,7 +165,7 @@ async function assignCreatorToSubitem(subitemId, boardId, cols) {
   }
 }
 
-// Nova função: atribui Henrique ao subitem
+// Nova automação: atribui Henrique após 1 minuto no último subitem
 async function assignFixedUserToSubitem(subitemId, boardId, cols, userId) {
   try {
     const responsibleCol = findColumn(cols, 'RESPONSÁVEL', 'people') ||
@@ -235,13 +235,23 @@ async function processEvent(body) {
     // Automação existente
     await assignCreatorToSubitem(lastSubitem.id, boardId, cols);
 
-    // Nova automação: se status = proj aprovado, aguarda 1 min antes de atribuir Henrique
+    // NOVA automação: se status = proj aprovado, aguarda 1 minuto antes de atribuir Henrique
     if (statusText.toLowerCase() === 'proj aprovado') {
-      console.log(`> Atribuição de Henrique agendada para daqui a 1 minuto no subitem ${lastSubitem.id}`);
+      console.log(`> Atribuição de Henrique agendada para daqui a 1 minuto`);
       (async () => {
         await new Promise(res => setTimeout(res, 60 * 1000)); // delay de 1 minuto
-        await assignFixedUserToSubitem(lastSubitem.id, boardId, cols, 69279625); // Henrique
-        console.log(`> Usuário Henrique atribuído ao subitem ${lastSubitem.id} (proj aprovado)`);
+        
+        // Rebusca os subitens para pegar o último
+        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+          console.warn(`> Nenhum subitem encontrado após 1 minuto`);
+          return;
+        }
+        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        
+        await assignFixedUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69279625); // Henrique
+        console.log(`> Usuário Henrique atribuído ao subitem ${lastSubitemAfterDelay.id} (proj aprovado)`);
       })();
     }
   } catch (err) {
