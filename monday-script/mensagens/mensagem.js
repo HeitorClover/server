@@ -42,14 +42,24 @@ async function sendWhatsappMessage(text) {
   }
 }
 
-// Processa evento do Monday
+// Processa evento do Monday (item ou subitem)
 async function processEvent(body) {
   try {
     const ev = body.event || {};
-    const novoResponsavelId = ev.value?.personsAndTeams?.[0]?.id || ev.value?.changed_person_id || null;
 
-    console.log("📌 Evento recebido - novoResponsavelId:", novoResponsavelId);
+    // Log completo do evento para debug
+    console.log("📌 Evento recebido completo:", JSON.stringify(ev, null, 2));
 
+    // Tenta extrair o ID do responsável
+    const novoResponsavelId =
+      ev.value?.personsAndTeams?.[0]?.id ||                  // padrão para coluna de pessoa
+      ev.value?.changed_person_id ||                         // mudança direta
+      ev?.column_values?.find(cv => cv.id === "responsavel")?.value?.personsAndTeams?.[0]?.id || // subitem
+      null;
+
+    console.log("📌 novoResponsavelId detectado:", novoResponsavelId);
+
+    // Se for o ID alvo, envia mensagem
     if (String(novoResponsavelId) === TARGET_PERSON_ID) {
       await sendWhatsappMessage("⚡ O responsável agora é Henrique!");
       console.log("📌 Trigger acionado para ID:", TARGET_PERSON_ID);
