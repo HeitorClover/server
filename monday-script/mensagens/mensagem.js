@@ -26,21 +26,22 @@ if (!MONDAY_API_KEY || !EVOLUTION_API_KEY) {
 
 // Função para enviar mensagem
 async function sendWhatsappMessage(text) {
-  try {
-    const res = await fetch(`${EVOLUTION_URL}/message/sendText/${SESSION_ID}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: EVOLUTION_API_KEY,
-      },
-      body: JSON.stringify({ to: DESTINO, text }),
-    });
-    const json = await res.json();
-    console.log("✅ Mensagem enviada:", JSON.stringify(json, null, 2));
-  } catch (err) {
-    console.error("❌ Erro ao enviar WhatsApp:", err.message || err);
+    try {
+      const res = await fetch(`${EVOLUTION_URL}/message/sendText/${SESSION_ID}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: EVOLUTION_API_KEY,
+        },
+        body: JSON.stringify({ number: DESTINO, text }) // <- aqui
+      });
+      const json = await res.json();
+      console.log("✅ Mensagem enviada:", JSON.stringify(json, null, 2));
+    } catch (err) {
+      console.error("❌ Erro ao enviar WhatsApp:", err.message || err);
+    }
   }
-}
+  
 
 // Processa evento do Monday (item ou subitem)
 async function processEvent(body) {
