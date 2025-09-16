@@ -25,7 +25,7 @@ const ACCEPT = [
   'pci','o.s concluida','proj aprovado','engenharia','unificação','desmembramento','concluido','siopi','solicitada','assinatura',
   'enviar conformidade', 'conformidade' , 'conforme', 'solicitar minuta' , 'contrato marcado' , 'minuta editada' , 
   'contrado assinado' , 'garantia' , 'garantia conforme' , 'reanálise' , 'cadastro' , 'processos parados' , 'assinatura de contrato' ,
-  'medições'
+  'medições' , 'aprovados cb'
 ];
 
 console.log('--------------------------------------------');
