@@ -70,12 +70,18 @@ async function processEvent(body) {
 }
 
 // Rota webhook
-app.post("/webhook", (req, res) => {
-  const body = req.body || {};
-  if (body.challenge) return res.status(200).json({ challenge: body.challenge });
-  res.status(200).json({ ok: true });
-  processEvent(body).catch(err => console.error("Erro processEvent:", err));
-});
+app.post("/webhook", express.json(), (req, res) => {
+    try {
+      const body = req.body;
+      console.log("📌 Evento recebido completo:", JSON.stringify(body, null, 2));
+      res.status(200).json({ ok: true });
+      processEvent(body).catch(err => console.error("Erro processEvent:", err));
+    } catch (err) {
+      console.error("❌ Erro no webhook:", err.message);
+      res.status(400).json({ error: err.message });
+    }
+  });
+  
 
 // Rota teste
 app.get("/", (_req, res) => res.send("Servidor rodando — Automação WhatsApp Evolution + Monday"));
