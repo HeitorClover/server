@@ -20,9 +20,9 @@ const DATE_COL_TITLE = 'FINALIZAÇÃO';
 // Status aceitos
 const ACCEPT = [
   'abrir conta','comercial','documentos','caixaaqui','doc pendente','assinatura','restrição',
-  'conformidade','avaliação','conta ativa','desist/demora','aprovado','condicionado','reprovado',
-  'analise','engenharia','projetos','projetos','escritura','ab matricula','alvará',
-  'pci','o.s concluida','proj aprovado','engenharia','unificação','desmembramento','concluido','siopi','solicitada','assinatura',
+  'conformidade','avaliação','conta ativa','desist/demora','aprovado','condicionado','reprovado', 'analise',
+  'ab matricula', 'fazer escritura', 'emitir alvará', 'alvara emitido', 'abrir o. s.', 'criar projeto', 'unificação' , 'desmembramento', 'proj iniciado', 'pci/memorial' , 'engenharia',
+  'concluido','siopi','solicitada','assinatura',
   'enviar conformidade', 'conformidade' , 'conforme', 'solicitar minuta' , 'contrato marcado' , 'minuta editada' , 
   'contrado assinado' , 'garantia' , 'garantia conforme' , 'reanálise' , 'cadastro' , 'processos parados' , 'assinatura de contrato' ,
   'medições' , 'aprovados cb'
