@@ -166,7 +166,7 @@ async function assignCreatorToSubitem(subitemId, boardId, cols) {
   }
 }
 
-// Nova automação: atribui Henrique após 1 minuto no último subitem
+// Nova automação: atribui usuário específico após 20 segundos no último subitem
 async function assignFixedUserToSubitem(subitemId, boardId, cols, userId) {
   try {
     const responsibleCol = findColumn(cols, 'RESPONSÁVEL', 'people') ||
@@ -236,23 +236,43 @@ async function processEvent(body) {
     // Automação existente
     await assignCreatorToSubitem(lastSubitem.id, boardId, cols);
 
-    // NOVA automação: se status = proj aprovado, aguarda 1 minuto antes de atribuir Henrique
-    if (statusText.toLowerCase() === 'proj aprovado') {
-      console.log(`> Atribuição de Henrique agendada para daqui a 1 minuto`);
+    // NOVA automação: se status = emitir alvará, aguarda 20 segundos antes de atribuir Henrique
+    if (statusText.toLowerCase() === 'emitir alvará') {
+      console.log(`> Atribuição de Henrique agendada para daqui a 20 segundos`);
       (async () => {
-        await new Promise(res => setTimeout(res, 60 * 1000)); // delay de 1 minuto
+        await new Promise(res => setTimeout(res, 20 * 1000)); // delay de 20 segundos
         
         // Rebusca os subitens para pegar o último
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
         if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
-          console.warn(`> Nenhum subitem encontrado após 1 minuto`);
+          console.warn(`> Nenhum subitem encontrado após 20 segundos`);
           return;
         }
         const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
         const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
         
         await assignFixedUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69279625); // Henrique
-        console.log(`> Usuário Henrique atribuído ao subitem ${lastSubitemAfterDelay.id} (proj aprovado)`);
+        console.log(`> Usuário Henrique atribuído ao subitem ${lastSubitemAfterDelay.id} (emitir alvará)`);
+      })();
+    }
+
+    // NOVA automação: se status = abrir o. s., aguarda 20 segundos antes de atribuir usuário 69279799
+    else if (statusText.toLowerCase() === 'abrir o. s.') {
+      console.log(`> Atribuição do usuário 69279799 agendada para daqui a 20 segundos`);
+      (async () => {
+        await new Promise(res => setTimeout(res, 20 * 1000)); // delay de 20 segundos
+        
+        // Rebusca os subitens para pegar o último
+        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+          console.warn(`> Nenhum subitem encontrado após 20 segundos`);
+          return;
+        }
+        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        
+        await assignFixedUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69279799); // Novo usuário
+        console.log(`> Usuário 69279799 atribuído ao subitem ${lastSubitemAfterDelay.id} (abrir o. s.)`);
       })();
     }
   } catch (err) {
