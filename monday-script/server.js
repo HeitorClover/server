@@ -22,7 +22,7 @@ const ACCEPT = [
   'abrir conta','comercial','documentos','caixaaqui','doc pendente','assinatura','restrição',
   'conformidade','avaliação','conta ativa','desist/demora','aprovado','condicionado','reprovado', 'analise',
   'ab matricula', 'fazer escritura', 'emitir alvará', 'alvara emitido', 'abrir o. s.', 'criar projeto', 'unificação' , 'desmembramento', 'proj iniciado', 'pci/memorial' , 'engenharia',
-  'concluido','siopi','solicitada','assinatura', 'unificação iniciada', 'desmembramento iniciado',
+  'concluido','siopi','solicitada','assinatura',
   'enviar conformidade', 'conformidade' , 'conforme', 'solicitar minuta' , 'contrato marcado' , 'minuta editada' , 
   'contrado assinado' , 'garantia' , 'garantia conforme' , 'reanálise' , 'cadastro' , 'processos parados' , 'assinatura de contrato' ,
   'medições' , 'aprovados cb'
@@ -196,33 +196,54 @@ async function findSubitemByName(itemId, subitemName) {
   );
 }
 
-// Obtém o responsável de um subitem
+// CORREÇÃO: Obtém o responsável de um subitem (query GraphQL corrigida)
 async function getResponsibleFromSubitem(subitemId) {
   try {
     const q = `query {
       items(ids: ${subitemId}) {
         id
+        name
         column_values {
-          id
-          title
+          column {
+            title
+            id
+          }
+          text
           value
         }
       }
     }`;
+    
     const data = await gql(q);
+    if (!data.items || data.items.length === 0) {
+      console.warn(`> Subitem ${subitemId} não encontrado`);
+      return null;
+    }
+
     const columnValues = data.items[0].column_values;
+    
+    // Encontrar a coluna de responsável
     const responsibleCol = columnValues.find(col => 
-      col.title && col.title.toLowerCase().includes('responsável')
+      col.column && col.column.title && col.column.title.toLowerCase().includes('responsável')
     );
-    if (!responsibleCol || !responsibleCol.value) {
+    
+    if (!responsibleCol || !responsibleCol.value || responsibleCol.value === '""') {
+      console.log(`> Nenhum responsável definido no subitem ${subitemId}`);
       return null;
     }
     
     // Parse do valor da coluna de pessoas
-    const valueJson = JSON.parse(responsibleCol.value);
-    if (valueJson.personsAndTeams && valueJson.personsAndTeams.length > 0) {
-      return valueJson.personsAndTeams[0].id;
+    try {
+      const valueJson = JSON.parse(responsibleCol.value);
+      if (valueJson.personsAndTeams && valueJson.personsAndTeams.length > 0) {
+        const responsibleId = valueJson.personsAndTeams[0].id;
+        console.log(`> Responsável encontrado: ${responsibleId}`);
+        return responsibleId;
+      }
+    } catch (parseError) {
+      console.warn(`> Valor da coluna responsável não é um JSON válido: ${responsibleCol.value}`);
     }
+    
     return null;
   } catch (err) {
     console.error(`> Erro ao obter responsável do subitem ${subitemId}:`, err);
@@ -282,17 +303,8 @@ async function processEvent(body) {
   const lastSubitem = subitems[subitems.length - 1];
   console.log(`> Nome do último subitem: "${lastSubitem.name}"`);
 
-  // REGRA 1: Se o nome do último subitem for "CRIAR PROJETO" não fazer nada
-  if (lastSubitem.name.toLowerCase().includes('criar projeto')) {
-    console.log(`> Subitem "CRIAR PROJETO" ignorado. Nenhuma ação será realizada.`);
-    return;
-  }
-
-  // REGRA 3: Se o nome do último subitem for "PROJ INICIADO" não fazer nada
-  if (lastSubitem.name.toLowerCase().includes('proj iniciado')) {
-    console.log(`> Subitem "PROJ INICIADO" ignorado. Nenhuma ação será realizada.`);
-    return;
-  }
+  // REMOVIDO: Regras de exclusão para "CRIAR PROJETO" e "PROJ INICIADO"
+  // Agora todos os subitens serão processados normalmente
 
   try {
     const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitem.id);
@@ -329,15 +341,34 @@ async function processEvent(body) {
         }
         const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
         
-        if (lastSubitemAfterDelay.name.toLowerCase().includes('criar projeto') || 
-            lastSubitemAfterDelay.name.toLowerCase().includes('proj iniciado')) {
-          console.log(`> Subitem "${lastSubitemAfterDelay.name}" ignorado após delay. Atribuição cancelada.`);
-          return;
-        }
-        
         const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
         await assignUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69279799);
         console.log(`> Usuário 69279799 atribuído ao subitem ${lastSubitemAfterDelay.id} (abrir o. s.)`);
+      })();
+    }
+
+    // NOVA FUNCIONALIDADE: Para "ab matricula" e "emitir alvará" - atribuir usuário 69279625 após 20 segundos
+    else if (statusText.toLowerCase().includes('ab matricula') || 
+             statusText.toLowerCase().includes('emitir alvará')) {
+      
+      console.log(`> Status "${statusText}" detectado. Atribuição do usuário 69279625 agendada para daqui a 20 segundos`);
+      
+      (async () => {
+        await new Promise(res => setTimeout(res, 20 * 1000));
+        
+        // Revalida qual é o último subitem após 20 segundos
+        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+          console.warn(`> Nenhum subitem encontrado após 20 segundos`);
+          return;
+        }
+        
+        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+        console.log(`> Último subitem após 20 segundos: "${lastSubitemAfterDelay.name}"`);
+        
+        const { boardId: boardIdAfterDelay, cols: colsAfterDelay } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        await assignUserToSubitem(lastSubitemAfterDelay.id, boardIdAfterDelay, colsAfterDelay, 69279625);
+        console.log(`> Usuário 69279625 atribuído ao subitem ${lastSubitemAfterDelay.id} (${statusText})`);
       })();
     }
 
@@ -369,6 +400,7 @@ async function processEvent(body) {
     console.error(`> Erro ao processar subitem ${lastSubitem.id}:`, err && err.message ? err.message : err);
   }
 }
+
 // Rota webhook
 app.post('/webhook', (req, res) => {
   const body = req.body || {};
