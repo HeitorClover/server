@@ -263,6 +263,12 @@ async function applyStandardActions(subitemId, boardId, cols, statusText) {
   }
 }
 
+// Verifica se deve ignorar a atribuição de usuário pelo nome do subitem
+function shouldIgnoreUserAssignment(subitemName) {
+  return subitemName.toLowerCase().includes('abrir o. s.') || 
+         subitemName.toLowerCase().includes('emitir alvará');
+}
+
 // Processa webhook
 async function processEvent(body) {
   const ev = body.event || {};
@@ -347,6 +353,12 @@ async function processEvent(body) {
           console.log(`> Subitem "${lastSubitemAfterDelay.name}" ignorado após delay. Atribuição cancelada.`);
           return;
         }
+
+        // NOVA REGRA: Se o nome do último subitem for "abrir o. s." ou "emitir alvará", não atribui usuário
+        if (shouldIgnoreUserAssignment(lastSubitemAfterDelay.name)) {
+          console.log(`> Subitem "${lastSubitemAfterDelay.name}" ignorado para atribuição de usuário.`);
+          return;
+        }
         
         const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
         await assignFixedUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69279625); // Henrique
@@ -372,6 +384,12 @@ async function processEvent(body) {
         if (lastSubitemAfterDelay.name.toLowerCase().includes('criar projeto') || 
             lastSubitemAfterDelay.name.toLowerCase().includes('proj iniciado')) {
           console.log(`> Subitem "${lastSubitemAfterDelay.name}" ignorado após delay. Atribuição cancelada.`);
+          return;
+        }
+
+        // NOVA REGRA: Se o nome do último subitem for "abrir o. s." ou "emitir alvará", não atribui usuário
+        if (shouldIgnoreUserAssignment(lastSubitemAfterDelay.name)) {
+          console.log(`> Subitem "${lastSubitemAfterDelay.name}" ignorado para atribuição de usuário.`);
           return;
         }
         
