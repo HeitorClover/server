@@ -22,7 +22,7 @@ const ACCEPT = [
   'abrir conta','comercial','documentos','caixaaqui','doc pendente','assinatura','restrição',
   'conformidade','avaliação','conta ativa','desist/demora','aprovado','condicionado','reprovado', 'analise',
   'ab matricula', 'fazer escritura', 'emitir alvará', 'alvara emitido', 'abrir o. s.', 'criar projeto', 'unificação' , 'desmembramento', 'proj iniciado', 'pci/memorial' , 'engenharia',
-  'concluido','siopi','solicitada','assinatura',
+  'concluido','siopi','solicitada','assinatura', 'unificação iniciada', 'desmembramento iniciado',
   'enviar conformidade', 'conformidade' , 'conforme', 'solicitar minuta' , 'contrato marcado' , 'minuta editada' , 
   'contrado assinado' , 'garantia' , 'garantia conforme' , 'reanálise' , 'cadastro' , 'processos parados' , 'assinatura de contrato' ,
   'medições' , 'aprovados cb'
@@ -153,50 +153,8 @@ async function setCompletedChecked(subitemId, boardId, columnId) {
   }
 }
 
-// Automação existente: atribui o creator à coluna RESPONSÁVEL
-async function assignCreatorToSubitem(subitemId, boardId, cols) {
-  try {
-    const responsibleCol = findColumn(cols, 'RESPONSÁVEL', 'people') ||
-                           findColumn(cols, 'Responsável', 'people') ||
-                           findColumn(cols, 'responsável', 'people');
-    if (!responsibleCol) {
-      console.warn(`> Coluna "RESPONSÁVEL" não encontrada no board do subitem ${subitemId}. Pulando atribuição.`);
-      return;
-    }
-
-    const q = `query { items(ids: ${subitemId}) { id creator { id } } }`;
-    const data = await gql(q);
-    const creatorId = data.items?.[0]?.creator?.id;
-    if (!creatorId) {
-      console.warn(`> Creator não encontrado para subitem ${subitemId}. Pulando atribuição.`);
-      return;
-    }
-
-    const value = `{\\"personsAndTeams\\":[{\\"id\\":${creatorId},\\"kind\\":\\"person\\"}]}`;
-
-    const mutation = `mutation {
-      change_column_value(
-        board_id: ${boardId},
-        item_id: ${subitemId},
-        column_id: "${responsibleCol.id}",
-        value: "${value}"
-      ) { id }
-    }`;
-
-    const res = await fetch('https://api.monday.com/v2', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: API_KEY },
-      body: JSON.stringify({ query: mutation })
-    });
-    const json = await res.json();
-    console.log(`> assignCreatorToSubitem result for ${subitemId}:`, JSON.stringify(json, null, 2));
-  } catch (err) {
-    console.error(`> Erro ao atribuir creator ao subitem ${subitemId}:`, err && err.message ? err.message : err);
-  }
-}
-
-// Nova automação: atribui usuário específico após 20 segundos no último subitem
-async function assignFixedUserToSubitem(subitemId, boardId, cols, userId) {
+// Nova automação: atribui usuário específico
+async function assignUserToSubitem(subitemId, boardId, cols, userId) {
   try {
     const responsibleCol = findColumn(cols, 'RESPONSÁVEL', 'people') ||
                            findColumn(cols, 'Responsável', 'people') ||
@@ -224,9 +182,9 @@ async function assignFixedUserToSubitem(subitemId, boardId, cols, userId) {
       body: JSON.stringify({ query: mutation })
     });
     const json = await res.json();
-    console.log(`> assignFixedUserToSubitem result for ${subitemId}:`, JSON.stringify(json, null, 2));
+    console.log(`> assignUserToSubitem result for ${subitemId}:`, JSON.stringify(json, null, 2));
   } catch (err) {
-    console.error(`> Erro ao atribuir usuário fixo no subitem ${subitemId}:`, err);
+    console.error(`> Erro ao atribuir usuário no subitem ${subitemId}:`, err);
   }
 }
 
@@ -236,6 +194,40 @@ async function findSubitemByName(itemId, subitemName) {
   return subitems.find(subitem => 
     subitem.name.toLowerCase().includes(subitemName.toLowerCase())
   );
+}
+
+// Obtém o responsável de um subitem
+async function getResponsibleFromSubitem(subitemId) {
+  try {
+    const q = `query {
+      items(ids: ${subitemId}) {
+        id
+        column_values {
+          id
+          title
+          value
+        }
+      }
+    }`;
+    const data = await gql(q);
+    const columnValues = data.items[0].column_values;
+    const responsibleCol = columnValues.find(col => 
+      col.title && col.title.toLowerCase().includes('responsável')
+    );
+    if (!responsibleCol || !responsibleCol.value) {
+      return null;
+    }
+    
+    // Parse do valor da coluna de pessoas
+    const valueJson = JSON.parse(responsibleCol.value);
+    if (valueJson.personsAndTeams && valueJson.personsAndTeams.length > 0) {
+      return valueJson.personsAndTeams[0].id;
+    }
+    return null;
+  } catch (err) {
+    console.error(`> Erro ao obter responsável do subitem ${subitemId}:`, err);
+    return null;
+  }
 }
 
 // Aplica ações padrão em um subitem (data + check)
@@ -261,12 +253,6 @@ async function applyStandardActions(subitemId, boardId, cols, statusText) {
   } else {
     console.log(`> Status "${statusText}" excluído da marcação CONCLUIDO`);
   }
-}
-
-// Verifica se deve ignorar a atribuição de usuário pelo nome do subitem
-function shouldIgnoreUserAssignment(subitemName) {
-  return subitemName.toLowerCase().includes('abrir o. s.') || 
-         subitemName.toLowerCase().includes('emitir alvará');
 }
 
 // Processa webhook
@@ -327,36 +313,15 @@ async function processEvent(body) {
       }
     }
 
-    // REGRA 4: Quando mudar para qualquer status, procurar o subitem "PROJ INICIADO"
-    // (Esta regra foi ajustada para ser mais genérica conforme sua descrição)
-    if (!statusText.toLowerCase().includes('proj iniciado')) {
-      console.log(`> Procurando subitem "PROJ INICIADO" para aplicar ações...`);
-      
-      const projIniciadoSubitem = await findSubitemByName(Number(itemId), 'proj iniciado');
-      if (projIniciadoSubitem) {
-        console.log(`> Subitem "PROJ INICIADO" encontrado (ID: ${projIniciadoSubitem.id}). Aplicando ações...`);
-        const { boardId: projIniciadoBoardId, cols: projIniciadoCols } = await getSubitemBoardAndColumns(projIniciadoSubitem.id);
-        
-        // Aplicar ações padrão no subitem "PROJ INICIADO"
-        await applyStandardActions(projIniciadoSubitem.id, projIniciadoBoardId, projIniciadoCols, statusText);
-      } else {
-        console.log(`> Subitem "PROJ INICIADO" não encontrado para o item ${itemId}`);
-      }
-    }
-
-    // Ações padrão para o último subitem (exceto quando ignorado pelas regras acima)
+    // Ações padrão para o último subitem (data + check)
     await applyStandardActions(lastSubitem.id, boardId, cols, statusText);
 
-    // Automação existente
-    await assignCreatorToSubitem(lastSubitem.id, boardId, cols);
-
-    // NOVA automação: se status = emitir alvará, aguarda 20 segundos antes de atribuir Henrique
-    if (statusText.toLowerCase().includes('emitir alvará')) {
-      console.log(`> Atribuição de Henrique agendada para daqui a 20 segundos`);
+    // NOVA LÓGICA: Atribuição de usuários específica por status
+    if (statusText.toLowerCase().includes('abrir o. s.')) {
+      console.log(`> Atribuição do usuário 69279799 agendada para daqui a 20 segundos`);
       (async () => {
-        await new Promise(res => setTimeout(res, 20 * 1000)); // delay de 20 segundos
+        await new Promise(res => setTimeout(res, 20 * 1000));
         
-        // Rebusca os subitens para pegar o último
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
         if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
           console.warn(`> Nenhum subitem encontrado após 20 segundos`);
@@ -364,63 +329,46 @@ async function processEvent(body) {
         }
         const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
         
-        // Verifica novamente as regras de exclusão após o delay
         if (lastSubitemAfterDelay.name.toLowerCase().includes('criar projeto') || 
             lastSubitemAfterDelay.name.toLowerCase().includes('proj iniciado')) {
           console.log(`> Subitem "${lastSubitemAfterDelay.name}" ignorado após delay. Atribuição cancelada.`);
           return;
         }
-
-        // REGRA 5: Se o nome do último subitem for "abrir o. s." ou "emitir alvará", não atribui usuário
-        if (shouldIgnoreUserAssignment(lastSubitemAfterDelay.name)) {
-          console.log(`> Subitem "${lastSubitemAfterDelay.name}" ignorado para atribuição de usuário. Apenas ações padrão foram aplicadas.`);
-          return;
-        }
         
         const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
-        await assignFixedUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69279625); // Henrique
-        console.log(`> Usuário Henrique atribuído ao subitem ${lastSubitemAfterDelay.id} (emitir alvará)`);
+        await assignUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69279799);
+        console.log(`> Usuário 69279799 atribuído ao subitem ${lastSubitemAfterDelay.id} (abrir o. s.)`);
       })();
     }
 
-    // NOVA automação: se status = abrir o. s., aguarda 20 segundos antes de atribuir usuário 69279799
-    else if (statusText.toLowerCase().includes('abrir o. s.')) {
-      console.log(`> Atribuição do usuário 69279799 agendada para daqui a 20 segundos`);
-      (async () => {
-        await new Promise(res => setTimeout(res, 20 * 1000)); // delay de 20 segundos
+    // NOVA FUNCIONALIDADE: Para unificação, criar projeto e desmembramento - copiar responsável de "ESCOLHA DE PROJETO"
+    else if (statusText.toLowerCase().includes('unificação') || 
+             statusText.toLowerCase().includes('criar projeto') || 
+             statusText.toLowerCase().includes('desmembramento')) {
+      
+      console.log(`> Status "${statusText}" detectado. Procurando responsável do subitem "ESCOLHA DE PROJETO"...`);
+      
+      const escolhaProjetoSubitem = await findSubitemByName(Number(itemId), 'ESCOLHA DE PROJETO');
+      if (escolhaProjetoSubitem) {
+        console.log(`> Subitem "ESCOLHA DE PROJETO" encontrado (ID: ${escolhaProjetoSubitem.id}). Obtendo responsável...`);
         
-        // Rebusca os subitens para pegar o último
-        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
-        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
-          console.warn(`> Nenhum subitem encontrado após 20 segundos`);
-          return;
+        const responsibleUserId = await getResponsibleFromSubitem(escolhaProjetoSubitem.id);
+        if (responsibleUserId) {
+          console.log(`> Responsável encontrado: ${responsibleUserId}. Atribuindo ao último subitem...`);
+          await assignUserToSubitem(lastSubitem.id, boardId, cols, responsibleUserId);
+          console.log(`> Responsável copiado de "ESCOLHA DE PROJETO" para o subitem ${lastSubitem.id}`);
+        } else {
+          console.warn(`> Nenhum responsável encontrado no subitem "ESCOLHA DE PROJETO"`);
         }
-        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
-        
-        // Verifica novamente as regras de exclusão após o delay
-        if (lastSubitemAfterDelay.name.toLowerCase().includes('criar projeto') || 
-            lastSubitemAfterDelay.name.toLowerCase().includes('proj iniciado')) {
-          console.log(`> Subitem "${lastSubitemAfterDelay.name}" ignorado após delay. Atribuição cancelada.`);
-          return;
-        }
-
-        // REGRA 5: Se o nome do último subitem for "abrir o. s." ou "emitir alvará", não atribui usuário
-        if (shouldIgnoreUserAssignment(lastSubitemAfterDelay.name)) {
-          console.log(`> Subitem "${lastSubitemAfterDelay.name}" ignorado para atribuição de usuário. Apenas ações padrão foram aplicadas.`);
-          return;
-        }
-        
-        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
-        await assignFixedUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69279799); // Novo usuário
-        console.log(`> Usuário 69279799 atribuído ao subitem ${lastSubitemAfterDelay.id} (abrir o. s.)`);
-      })();
+      } else {
+        console.warn(`> Subitem "ESCOLHA DE PROJETO" não encontrado para o item ${itemId}`);
+      }
     }
 
   } catch (err) {
     console.error(`> Erro ao processar subitem ${lastSubitem.id}:`, err && err.message ? err.message : err);
   }
 }
-
 // Rota webhook
 app.post('/webhook', (req, res) => {
   const body = req.body || {};
