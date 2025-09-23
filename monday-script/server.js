@@ -372,28 +372,49 @@ async function processEvent(body) {
       })();
     }
 
-    // NOVA FUNCIONALIDADE: Para unificação, criar projeto e desmembramento - copiar responsável de "ESCOLHA DE PROJETO"
+    // NOVA FUNCIONALIDADE MODIFICADA: Para unificação, criar projeto e desmembramento - copiar responsável de "ESCOLHA DE PROJETO"
     else if (statusText.toLowerCase().includes('unificação') || 
              statusText.toLowerCase().includes('criar projeto') || 
              statusText.toLowerCase().includes('desmembramento')) {
       
-      console.log(`> Status "${statusText}" detectado. Procurando responsável do subitem "ESCOLHA DE PROJETO"...`);
+      console.log(`> Status "${statusText}" detectado. Aguardando 15 segundos antes de copiar responsável...`);
       
-      const escolhaProjetoSubitem = await findSubitemByName(Number(itemId), 'ESCOLHA DE PROJETO');
-      if (escolhaProjetoSubitem) {
-        console.log(`> Subitem "ESCOLHA DE PROJETO" encontrado (ID: ${escolhaProjetoSubitem.id}). Obtendo responsável...`);
+      (async () => {
+        // Aguarda 15 segundos antes de processar
+        await new Promise(res => setTimeout(res, 15 * 1000));
         
-        const responsibleUserId = await getResponsibleFromSubitem(escolhaProjetoSubitem.id);
-        if (responsibleUserId) {
-          console.log(`> Responsável encontrado: ${responsibleUserId}. Atribuindo ao último subitem...`);
-          await assignUserToSubitem(lastSubitem.id, boardId, cols, responsibleUserId);
-          console.log(`> Responsável copiado de "ESCOLHA DE PROJETO" para o subitem ${lastSubitem.id}`);
-        } else {
-          console.warn(`> Nenhum responsável encontrado no subitem "ESCOLHA DE PROJETO"`);
+        // Revalida qual é o último subitem após 15 segundos
+        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+          console.warn(`> Nenhum subitem encontrado após 15 segundos`);
+          return;
         }
-      } else {
-        console.warn(`> Subitem "ESCOLHA DE PROJETO" não encontrado para o item ${itemId}`);
-      }
+        
+        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+        console.log(`> Último subitem após 15 segundos: "${lastSubitemAfterDelay.name}"`);
+        
+        // Obtém o board e colunas do último subitem atualizado
+        const { boardId: boardIdAfterDelay, cols: colsAfterDelay } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        
+        // Procura o subitem "ESCOLHA DE PROJETO" após o delay
+        console.log(`> Procurando responsável do subitem "ESCOLHA DE PROJETO"...`);
+        
+        const escolhaProjetoSubitem = await findSubitemByName(Number(itemId), 'ESCOLHA DE PROJETO');
+        if (escolhaProjetoSubitem) {
+          console.log(`> Subitem "ESCOLHA DE PROJETO" encontrado (ID: ${escolhaProjetoSubitem.id}). Obtendo responsável...`);
+          
+          const responsibleUserId = await getResponsibleFromSubitem(escolhaProjetoSubitem.id);
+          if (responsibleUserId) {
+            console.log(`> Responsável encontrado: ${responsibleUserId}. Atribuindo ao último subitem...`);
+            await assignUserToSubitem(lastSubitemAfterDelay.id, boardIdAfterDelay, colsAfterDelay, responsibleUserId);
+            console.log(`> Responsável copiado de "ESCOLHA DE PROJETO" para o subitem ${lastSubitemAfterDelay.id}`);
+          } else {
+            console.warn(`> Nenhum responsável encontrado no subitem "ESCOLHA DE PROJETO"`);
+          }
+        } else {
+          console.warn(`> Subitem "ESCOLHA DE PROJETO" não encontrado para o item ${itemId}`);
+        }
+      })();
     }
 
   } catch (err) {
