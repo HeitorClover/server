@@ -22,8 +22,8 @@ const ACCEPT = [
   'abrir conta','comercial','documentos','caixaaqui','doc pendente','assinatura','restrição',
   'conformidade','avaliação','conta ativa','desist/demora','aprovado','condicionado','reprovado', 'analise',
   'ab matricula', 'fazer escritura', 'emitir alvará', 'alvara emitido', 'abrir o. s.', 'criar projeto', 'unificação' , 'desmembramento', 'proj iniciado', 'pci/memorial' , 'engenharia',
-  'concluido','siopi','solicitada','assinatura',
-  'enviar conformidade', 'conformidade' , 'conforme', 'solicitar minuta' , 'contrato marcado' , 'minuta editada' , 
+  'concluido','siopi','solicitada', 'assinatura', 'desmembramento inciado', 'unificação iniciada', 'doc - unificação' , 'doc - desmembramento'
+  , 'enviar conformidade', 'conformidade' , 'conforme', 'solicitar minuta' , 'contrato marcado' , 'minuta editada' , 
   'contrado assinado' , 'garantia' , 'garantia conforme' , 'reanálise' , 'cadastro' , 'processos parados' , 'assinatura de contrato' ,
   'medições' , 'aprovados cb'
 ];
@@ -348,7 +348,8 @@ async function processEvent(body) {
     }
 
     // NOVA FUNCIONALIDADE: Para "ab matricula" e "emitir alvará" - atribuir usuário 69279625 após 20 segundos
-    else if (statusText.toLowerCase().includes('ab matricula') || 
+    else if (statusText.toLowerCase().includes('ab matricula') ||
+             statusText.toLowerCase().includes('fazer escritura') ||
              statusText.toLowerCase().includes('emitir alvará')) {
       
       console.log(`> Status "${statusText}" detectado. Atribuição do usuário 69279625 agendada para daqui a 20 segundos`);
@@ -373,9 +374,12 @@ async function processEvent(body) {
     }
 
     // NOVA FUNCIONALIDADE MODIFICADA: Para unificação, criar projeto e desmembramento - copiar responsável de "ESCOLHA DE PROJETO"
-    else if (statusText.toLowerCase().includes('unificação') || 
-             statusText.toLowerCase().includes('criar projeto') || 
-             statusText.toLowerCase().includes('desmembramento')) {
+    else if (statusText.toLowerCase().includes('criar projeto') || 
+             statusText.toLowerCase().includes('proj iniciado') ||
+             statusText.toLowerCase().includes('unificação') ||
+             statusText.toLowerCase().includes('unificação iniciada') ||
+             statusText.toLowerCase().includes('desmembramento') ||
+             statusText.toLowerCase().includes('desmembramento iniciado')) {
       
       console.log(`> Status "${statusText}" detectado. Aguardando 15 segundos antes de copiar responsável...`);
       
