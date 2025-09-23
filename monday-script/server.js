@@ -28,6 +28,9 @@ const ACCEPT = [
   'medições' , 'aprovados cb'
 ];
 
+// Status que NÃO devem marcar a coluna CONCLUIDO
+const EXCLUDE_FROM_COMPLETED = ['pci/memorial', 'unificação', 'desmembramento'];
+
 console.log('--------------------------------------------');
 console.log(`STARTUP: ${new Date().toISOString()}`);
 console.log(`BOOT_ID: ${BOOT_ID}`);
@@ -124,6 +127,32 @@ async function setTodayDate(subitemId, boardId, columnId) {
   }
 }
 
+// Marca coluna CONCLUIDO como checked
+async function setCompletedChecked(subitemId, boardId, columnId) {
+  try {
+    const mutation = `mutation {
+      change_column_value(
+        board_id: ${boardId},
+        item_id: ${subitemId},
+        column_id: "${columnId}",
+        value: "{\\"checked\\":true}"
+      ) { id }
+    }`;
+
+    const res = await fetch('https://api.monday.com/v2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: API_KEY },
+      body: JSON.stringify({ query: mutation })
+    });
+    const json = await res.json();
+    console.log(`> setCompletedChecked result for ${subitemId}:`, JSON.stringify(json, null, 2));
+    return json;
+  } catch (err) {
+    console.error(`> Erro ao marcar CONCLUIDO para ${subitemId}:`, err && err.message ? err.message : err);
+    throw err;
+  }
+}
+
 // Automação existente: atribui o creator à coluna RESPONSÁVEL
 async function assignCreatorToSubitem(subitemId, boardId, cols) {
   try {
@@ -201,6 +230,39 @@ async function assignFixedUserToSubitem(subitemId, boardId, cols, userId) {
   }
 }
 
+// Encontra subitem pelo nome
+async function findSubitemByName(itemId, subitemName) {
+  const subitems = await getSubitemsOfItem(itemId);
+  return subitems.find(subitem => 
+    subitem.name.toLowerCase().includes(subitemName.toLowerCase())
+  );
+}
+
+// Aplica ações padrão em um subitem (data + check)
+async function applyStandardActions(subitemId, boardId, cols, statusText) {
+  const dateCol = findColumn(cols, DATE_COL_TITLE, 'date');
+  if (!dateCol) {
+    console.warn(`> Coluna de data "${DATE_COL_TITLE}" não encontrada para subitem ${subitemId}`);
+    return;
+  }
+  
+  await setTodayDate(subitemId, boardId, dateCol.id);
+  console.log(`> Data atualizada para o subitem ${subitemId}`);
+
+  // Marcar CONCLUIDO como checked (exceto para status excluídos)
+  if (!EXCLUDE_FROM_COMPLETED.map(s => s.toLowerCase()).includes(statusText.toLowerCase())) {
+    const completedCol = findColumn(cols, 'CONCLUIDO', 'checkbox');
+    if (completedCol) {
+      await setCompletedChecked(subitemId, boardId, completedCol.id);
+      console.log(`> Coluna CONCLUIDO marcada como checked para subitem ${subitemId}`);
+    } else {
+      console.warn(`> Coluna "CONCLUIDO" não encontrada no subitem ${subitemId}`);
+    }
+  } else {
+    console.log(`> Status "${statusText}" excluído da marcação CONCLUIDO`);
+  }
+}
+
 // Processa webhook
 async function processEvent(body) {
   const ev = body.event || {};
@@ -226,18 +288,47 @@ async function processEvent(body) {
 
   // Atualiza somente o último subitem
   const lastSubitem = subitems[subitems.length - 1];
+  console.log(`> Nome do último subitem: "${lastSubitem.name}"`);
+
+  // REGRA 1: Se o nome do último subitem for "CRIAR PROJETO" não fazer nada
+  if (lastSubitem.name.toLowerCase().includes('criar projeto')) {
+    console.log(`> Subitem "CRIAR PROJETO" ignorado. Nenhuma ação será realizada.`);
+    return;
+  }
+
+  // REGRA 3: Se o nome do último subitem for "PROJ INICIADO" não fazer nada
+  if (lastSubitem.name.toLowerCase().includes('proj iniciado')) {
+    console.log(`> Subitem "PROJ INICIADO" ignorado. Nenhuma ação será realizada.`);
+    return;
+  }
+
   try {
     const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitem.id);
-    const dateCol = findColumn(cols, DATE_COL_TITLE, 'date');
-    if (!dateCol) return console.warn(`> Coluna de data "${DATE_COL_TITLE}" não encontrada para subitem ${lastSubitem.id}`);
-    await setTodayDate(lastSubitem.id, boardId, dateCol.id);
-    console.log(`> Data atualizada apenas para o último subitem ${lastSubitem.id}`);
+
+    // REGRA 2: Quando mudar para "PROJ INICIADO" procurar o subitem "CRIAR PROJETO"
+    if (statusText.toLowerCase().includes('proj iniciado')) {
+      console.log(`> Status "PROJ INICIADO" detectado. Procurando subitem "CRIAR PROJETO"...`);
+      
+      const criarProjetoSubitem = await findSubitemByName(Number(itemId), 'criar projeto');
+      if (criarProjetoSubitem) {
+        console.log(`> Subitem "CRIAR PROJETO" encontrado (ID: ${criarProjetoSubitem.id}). Aplicando ações...`);
+        const { boardId: criarProjetoBoardId, cols: criarProjetoCols } = await getSubitemBoardAndColumns(criarProjetoSubitem.id);
+        
+        // Aplicar ações padrão no subitem "CRIAR PROJETO"
+        await applyStandardActions(criarProjetoSubitem.id, criarProjetoBoardId, criarProjetoCols, statusText);
+      } else {
+        console.warn(`> Subitem "CRIAR PROJETO" não encontrado para o item ${itemId}`);
+      }
+    }
+
+    // Ações padrão para o último subitem (exceto quando ignorado pelas regras acima)
+    await applyStandardActions(lastSubitem.id, boardId, cols, statusText);
 
     // Automação existente
     await assignCreatorToSubitem(lastSubitem.id, boardId, cols);
 
     // NOVA automação: se status = emitir alvará, aguarda 20 segundos antes de atribuir Henrique
-    if (statusText.toLowerCase() === 'emitir alvará') {
+    if (statusText.toLowerCase().includes('emitir alvará')) {
       console.log(`> Atribuição de Henrique agendada para daqui a 20 segundos`);
       (async () => {
         await new Promise(res => setTimeout(res, 20 * 1000)); // delay de 20 segundos
@@ -249,15 +340,22 @@ async function processEvent(body) {
           return;
         }
         const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
-        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
         
+        // Verifica novamente as regras de exclusão após o delay
+        if (lastSubitemAfterDelay.name.toLowerCase().includes('criar projeto') || 
+            lastSubitemAfterDelay.name.toLowerCase().includes('proj iniciado')) {
+          console.log(`> Subitem "${lastSubitemAfterDelay.name}" ignorado após delay. Atribuição cancelada.`);
+          return;
+        }
+        
+        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
         await assignFixedUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69279625); // Henrique
         console.log(`> Usuário Henrique atribuído ao subitem ${lastSubitemAfterDelay.id} (emitir alvará)`);
       })();
     }
 
     // NOVA automação: se status = abrir o. s., aguarda 20 segundos antes de atribuir usuário 69279799
-    else if (statusText.toLowerCase() === 'abrir o. s.') {
+    else if (statusText.toLowerCase().includes('abrir o. s.')) {
       console.log(`> Atribuição do usuário 69279799 agendada para daqui a 20 segundos`);
       (async () => {
         await new Promise(res => setTimeout(res, 20 * 1000)); // delay de 20 segundos
@@ -269,12 +367,20 @@ async function processEvent(body) {
           return;
         }
         const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
-        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
         
+        // Verifica novamente as regras de exclusão após o delay
+        if (lastSubitemAfterDelay.name.toLowerCase().includes('criar projeto') || 
+            lastSubitemAfterDelay.name.toLowerCase().includes('proj iniciado')) {
+          console.log(`> Subitem "${lastSubitemAfterDelay.name}" ignorado após delay. Atribuição cancelada.`);
+          return;
+        }
+        
+        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
         await assignFixedUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69279799); // Novo usuário
         console.log(`> Usuário 69279799 atribuído ao subitem ${lastSubitemAfterDelay.id} (abrir o. s.)`);
       })();
     }
+
   } catch (err) {
     console.error(`> Erro ao processar subitem ${lastSubitem.id}:`, err && err.message ? err.message : err);
   }
