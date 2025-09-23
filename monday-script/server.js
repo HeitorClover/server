@@ -327,6 +327,23 @@ async function processEvent(body) {
       }
     }
 
+    // REGRA 4: Quando mudar para qualquer status, procurar o subitem "PROJ INICIADO"
+    // (Esta regra foi ajustada para ser mais genérica conforme sua descrição)
+    if (!statusText.toLowerCase().includes('proj iniciado')) {
+      console.log(`> Procurando subitem "PROJ INICIADO" para aplicar ações...`);
+      
+      const projIniciadoSubitem = await findSubitemByName(Number(itemId), 'proj iniciado');
+      if (projIniciadoSubitem) {
+        console.log(`> Subitem "PROJ INICIADO" encontrado (ID: ${projIniciadoSubitem.id}). Aplicando ações...`);
+        const { boardId: projIniciadoBoardId, cols: projIniciadoCols } = await getSubitemBoardAndColumns(projIniciadoSubitem.id);
+        
+        // Aplicar ações padrão no subitem "PROJ INICIADO"
+        await applyStandardActions(projIniciadoSubitem.id, projIniciadoBoardId, projIniciadoCols, statusText);
+      } else {
+        console.log(`> Subitem "PROJ INICIADO" não encontrado para o item ${itemId}`);
+      }
+    }
+
     // Ações padrão para o último subitem (exceto quando ignorado pelas regras acima)
     await applyStandardActions(lastSubitem.id, boardId, cols, statusText);
 
@@ -354,9 +371,9 @@ async function processEvent(body) {
           return;
         }
 
-        // NOVA REGRA: Se o nome do último subitem for "abrir o. s." ou "emitir alvará", não atribui usuário
+        // REGRA 5: Se o nome do último subitem for "abrir o. s." ou "emitir alvará", não atribui usuário
         if (shouldIgnoreUserAssignment(lastSubitemAfterDelay.name)) {
-          console.log(`> Subitem "${lastSubitemAfterDelay.name}" ignorado para atribuição de usuário.`);
+          console.log(`> Subitem "${lastSubitemAfterDelay.name}" ignorado para atribuição de usuário. Apenas ações padrão foram aplicadas.`);
           return;
         }
         
@@ -387,9 +404,9 @@ async function processEvent(body) {
           return;
         }
 
-        // NOVA REGRA: Se o nome do último subitem for "abrir o. s." ou "emitir alvará", não atribui usuário
+        // REGRA 5: Se o nome do último subitem for "abrir o. s." ou "emitir alvará", não atribui usuário
         if (shouldIgnoreUserAssignment(lastSubitemAfterDelay.name)) {
-          console.log(`> Subitem "${lastSubitemAfterDelay.name}" ignorado para atribuição de usuário.`);
+          console.log(`> Subitem "${lastSubitemAfterDelay.name}" ignorado para atribuição de usuário. Apenas ações padrão foram aplicadas.`);
           return;
         }
         
