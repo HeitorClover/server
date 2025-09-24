@@ -22,14 +22,24 @@ const ACCEPT = [
   'abrir conta','comercial','documentos','caixaaqui','doc pendente','assinatura','restrição',
   'conformidade','avaliação','conta ativa','desist/demora','aprovado','condicionado','reprovado', 'analise',
   'ab matricula', 'fazer escritura', 'emitir alvará', 'alvara emitido', 'abrir o. s.', 'criar projeto', 'unificação' , 'desmembramento', 'proj iniciado', 'pci/memorial' , 'engenharia',
-  'concluido','siopi','solicitada', 'assinatura', 'desmembramento inciado', 'unificação iniciada', 'doc - unificação' , 'doc - desmembramento'
+  'concluido','siopi','solicitada', 'assinatura', 'desmembramento iniciado', 'unificação iniciada', 'doc - unificação' , 'doc - desmembramento'
   , 'enviar conformidade', 'conformidade' , 'conforme', 'solicitar minuta' , 'contrato marcado' , 'minuta editada' , 
   'contrado assinado' , 'garantia' , 'garantia conforme' , 'reanálise' , 'cadastro' , 'processos parados' , 'assinatura de contrato' ,
   'medições' , 'aprovados cb'
 ];
 
 // Status que NÃO devem marcar a coluna CONCLUIDO
-const EXCLUDE_FROM_COMPLETED = ['pci/memorial', 'unificação', 'desmembramento'];
+const EXCLUDE_FROM_COMPLETED = [''];
+
+// Subitens que NÃO devem receber data e check
+const EXCLUDED_SUBITEM_NAMES = [
+  'DOC - AB MATRICULA',
+  'DOC - FAZER ESCRITURA', 
+  'DOC - UNIFICAÇÃO',
+  'DOC - DESMEMBRAMENTO',
+  'DOC - EMITIR ALVARÁ',
+  'DOC - ALVARÁ EMITIDO'
+];
 
 console.log('--------------------------------------------');
 console.log(`STARTUP: ${new Date().toISOString()}`);
@@ -276,6 +286,13 @@ async function applyStandardActions(subitemId, boardId, cols, statusText) {
   }
 }
 
+// Verifica se o subitem está na lista de exclusão
+function isSubitemExcluded(subitemName) {
+  return EXCLUDED_SUBITEM_NAMES.some(name => 
+    subitemName.toLowerCase().includes(name.toLowerCase())
+  );
+}
+
 // Processa webhook
 async function processEvent(body) {
   const ev = body.event || {};
@@ -303,9 +320,6 @@ async function processEvent(body) {
   const lastSubitem = subitems[subitems.length - 1];
   console.log(`> Nome do último subitem: "${lastSubitem.name}"`);
 
-  // REMOVIDO: Regras de exclusão para "CRIAR PROJETO" e "PROJ INICIADO"
-  // Agora todos os subitens serão processados normalmente
-
   try {
     const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitem.id);
 
@@ -318,15 +332,20 @@ async function processEvent(body) {
         console.log(`> Subitem "CRIAR PROJETO" encontrado (ID: ${criarProjetoSubitem.id}). Aplicando ações...`);
         const { boardId: criarProjetoBoardId, cols: criarProjetoCols } = await getSubitemBoardAndColumns(criarProjetoSubitem.id);
         
-        // Aplicar ações padrão no subitem "CRIAR PROJETO"
+        // Aplicar ações padrão no subitem "CRIAR PROJETO" (mesmo se for DOC)
         await applyStandardActions(criarProjetoSubitem.id, criarProjetoBoardId, criarProjetoCols, statusText);
       } else {
         console.warn(`> Subitem "CRIAR PROJETO" não encontrado para o item ${itemId}`);
       }
     }
 
-    // Ações padrão para o último subitem (data + check)
-    await applyStandardActions(lastSubitem.id, boardId, cols, statusText);
+    // VERIFICAÇÃO: Não aplicar data/check se o subitem estiver na lista de exclusão
+    if (!isSubitemExcluded(lastSubitem.name)) {
+      // Ações padrão para o último subitem (data + check)
+      await applyStandardActions(lastSubitem.id, boardId, cols, statusText);
+    } else {
+      console.log(`> Subitem "${lastSubitem.name}" está na lista de exclusão. Pulando data e check.`);
+    }
 
     // NOVA LÓGICA: Atribuição de usuários específica por status
     if (statusText.toLowerCase().includes('abrir o. s.')) {
