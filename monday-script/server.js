@@ -400,6 +400,7 @@ async function processEvent(body) {
              statusText.toLowerCase().includes('unificação') ||
              statusText.toLowerCase().includes('unificação iniciada') ||
              statusText.toLowerCase().includes('desmembramento') ||
+             statusText.toLowerCase().includes('pci/memorial') ||
              statusText.toLowerCase().includes('desmembramento iniciado')) {
       
       console.log(`> Status "${statusText}" detectado. Aguardando 15 segundos antes de copiar responsável...`);
