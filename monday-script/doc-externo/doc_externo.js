@@ -324,7 +324,7 @@ async function processWebhookEvent(body) {
     const itemName = item.name.toUpperCase();
     const isUnificacaoIniciada = itemName.includes('UNIFICAÇÃO INICIADA');
     const isDesmembramentoIniciado = itemName.includes('DESMEMBRAMENTO INICIADO');
-    const isProjIniciado = itemName.includes('PROJ INICIADO');
+    const isProjIniciado = itemName.includes('PROJETO INICIADO');
     const isDocEmitirAlvara = itemName.includes('DOC - EMITIR ALVARÁ');
 
     if (!isUnificacaoIniciada && !isDesmembramentoIniciado && !isProjIniciado && !isDocEmitirAlvara) {
