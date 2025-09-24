@@ -38,6 +38,126 @@ async function gql(query) {
   return data.data;
 }
 
+// Obtém todos os subitens de um item pai
+async function getSubitemsOfItem(itemId) {
+  const query = `query { 
+    items(ids: ${itemId}) { 
+      id 
+      subitems { 
+        id 
+        name 
+      } 
+    } 
+  }`;
+  
+  try {
+    const data = await gql(query);
+    return data.items?.[0]?.subitems || [];
+  } catch (error) {
+    console.error(`Erro ao obter subitems do item ${itemId}:`, error);
+    return [];
+  }
+}
+
+// Encontra subitem pelo nome
+async function findSubitemByName(itemId, subitemName) {
+  const subitems = await getSubitemsOfItem(itemId);
+  return subitems.find(subitem => 
+    subitem.name.toLowerCase().includes(subitemName.toLowerCase())
+  );
+}
+
+// Obtém o responsável de um subitem
+async function getResponsibleFromSubitem(subitemId) {
+  try {
+    const query = `query {
+      items(ids: ${subitemId}) {
+        id
+        name
+        column_values {
+          column {
+            title
+            id
+          }
+          text
+          value
+        }
+      }
+    }`;
+    
+    const data = await gql(query);
+    if (!data.items || data.items.length === 0) {
+      console.warn(`> Subitem ${subitemId} não encontrado`);
+      return null;
+    }
+
+    const columnValues = data.items[0].column_values;
+    
+    // Encontrar a coluna de responsável
+    const responsibleCol = columnValues.find(col => 
+      col.column && col.column.title && col.column.title.toLowerCase().includes('responsável')
+    );
+    
+    if (!responsibleCol || !responsibleCol.value || responsibleCol.value === '""') {
+      console.log(`> Nenhum responsável definido no subitem ${subitemId}`);
+      return null;
+    }
+    
+    // Parse do valor da coluna de pessoas
+    try {
+      const valueJson = JSON.parse(responsibleCol.value);
+      if (valueJson.personsAndTeams && valueJson.personsAndTeams.length > 0) {
+        const responsibleId = valueJson.personsAndTeams[0].id;
+        console.log(`> Responsável encontrado: ${responsibleId}`);
+        return responsibleId;
+      }
+    } catch (parseError) {
+      console.warn(`> Valor da coluna responsável não é um JSON válido: ${responsibleCol.value}`);
+    }
+    
+    return null;
+  } catch (err) {
+    console.error(`> Erro ao obter responsável do subitem ${subitemId}:`, err);
+    return null;
+  }
+}
+
+// Atribui usuário a um subitem
+async function assignUserToSubitem(subitemId, boardId, cols, userId) {
+  try {
+    const responsibleCol = cols.find(col => 
+      col.title && col.title.toLowerCase().includes('responsável')
+    );
+    
+    if (!responsibleCol) {
+      console.warn(`> Coluna "RESPONSÁVEL" não encontrada no subitem ${subitemId}`);
+      return;
+    }
+
+    const value = { personsAndTeams: [{ id: Number(userId), kind: "person" }] };
+    const valueStr = JSON.stringify(value).replace(/"/g, '\\"');
+
+    const mutation = `mutation {
+      change_column_value(
+        board_id: ${boardId},
+        item_id: ${subitemId},
+        column_id: "${responsibleCol.id}",
+        value: "${valueStr}"
+      ) { id }
+    }`;
+
+    const res = await fetch('https://api.monday.com/v2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: API_KEY },
+      body: JSON.stringify({ query: mutation })
+    });
+    const json = await res.json();
+    console.log(`> assignUserToSubitem result for ${subitemId}:`, JSON.stringify(json, null, 2));
+  } catch (err) {
+    console.error(`> Erro ao atribuir usuário no subitem ${subitemId}:`, err);
+  }
+}
+
 // Obtém o item pai de um subitem
 async function getParentItem(subitemId) {
   const query = `query {
@@ -281,6 +401,55 @@ async function getColumnTitle(columnId) {
   }
 }
 
+// Função para copiar responsável após 30 segundos
+async function copyResponsavelToPCI(itemId) {
+  console.log(`> Aguardando 30 segundos antes de copiar responsável...`);
+  
+  await new Promise(res => setTimeout(res, 30 * 1000));
+  
+  console.log(`> Procurando subitems após 30 segundos...`);
+  
+  const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+  if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+    console.warn(`> Nenhum subitem encontrado após 30 segundos`);
+    return;
+  }
+  
+  // Procura o subitem PCI / MEMORIAL
+  const pciMemorialSubitem = await findSubitemByName(Number(itemId), 'PCI / MEMORIAL');
+  if (!pciMemorialSubitem) {
+    console.warn(`> Subitem "PCI / MEMORIAL" não encontrado para o item ${itemId}`);
+    return;
+  }
+  
+  console.log(`> Subitem "PCI / MEMORIAL" encontrado (ID: ${pciMemorialSubitem.id})`);
+  
+  // Procura o subitem ESCOLHA DE PROJETO
+  const escolhaProjetoSubitem = await findSubitemByName(Number(itemId), 'ESCOLHA DE PROJETO');
+  if (!escolhaProjetoSubitem) {
+    console.warn(`> Subitem "ESCOLHA DE PROJETO" não encontrado para o item ${itemId}`);
+    return;
+  }
+  
+  console.log(`> Subitem "ESCOLHA DE PROJETO" encontrado (ID: ${escolhaProjetoSubitem.id})`);
+  
+  // Obtém o responsável do ESCOLHA DE PROJETO
+  const responsibleUserId = await getResponsibleFromSubitem(escolhaProjetoSubitem.id);
+  if (!responsibleUserId) {
+    console.warn(`> Nenhum responsável encontrado no subitem "ESCOLHA DE PROJETO"`);
+    return;
+  }
+  
+  console.log(`> Responsável encontrado: ${responsibleUserId}`);
+  
+  // Obtém o board e colunas do subitem PCI / MEMORIAL
+  const { boardId, cols } = await getSubitemBoardAndColumns(pciMemorialSubitem.id);
+  
+  // Atribui o responsável ao PCI / MEMORIAL
+  await assignUserToSubitem(pciMemorialSubitem.id, boardId, cols, responsibleUserId);
+  console.log(`✅ Responsável copiado de "ESCOLHA DE PROJETO" para "PCI / MEMORIAL"`);
+}
+
 // Processa evento de webhook
 async function processWebhookEvent(body) {
   try {
@@ -320,18 +489,6 @@ async function processWebhookEvent(body) {
 
     console.log(`🔍 Processando subitem: "${item.name}"`);
 
-    // Verifica os tipos de subitem
-    const itemName = item.name.toUpperCase();
-    const isUnificacaoIniciada = itemName.includes('UNIFICAÇÃO INICIADA');
-    const isDesmembramentoIniciado = itemName.includes('DESMEMBRAMENTO INICIADO');
-    const isProjIniciado = itemName.includes('PROJETO INICIADO');
-    const isDocEmitirAlvara = itemName.includes('DOC - EMITIR ALVARÁ');
-
-    if (!isUnificacaoIniciada && !isDesmembramentoIniciado && !isProjIniciado && !isDocEmitirAlvara) {
-      console.log('⏭️ Subitem não é dos tipos esperados, ignorando.');
-      return;
-    }
-
     // Verifica se o checkbox está marcado
     let isChecked = false;
     try {
@@ -360,7 +517,7 @@ async function processWebhookEvent(body) {
 
     console.log(`✅ Checkbox marcado detectado para: ${item.name}`);
 
-    // 1. AÇÃO: Atualizar coluna FINALIZAÇÃO no próprio subitem
+    // 1. AÇÃO: Atualizar coluna FINALIZAÇÃO no próprio subitem (PARA QUALQUER SUBITEM)
     const subitemBoardInfo = await getSubitemBoardAndColumns(itemId);
     if (subitemBoardInfo) {
       const finalizacaoColumn = findColumn(subitemBoardInfo.cols, 'FINALIZAÇÃO', 'date');
@@ -372,33 +529,44 @@ async function processWebhookEvent(body) {
       }
     }
 
-    // 2. AÇÃO: Atualizar colunas no item pai baseado no tipo de subitem
+    // 2. AÇÃO: Copiar responsável após 30 segundos (PARA QUALQUER SUBITEM)
     const parentItem = await getParentItem(itemId);
-    if (!parentItem) {
-      console.warn('⚠️ Item pai não encontrado');
-      return;
+    if (parentItem) {
+      console.log(`> Agendando cópia de responsável para daqui a 30 segundos...`);
+      copyResponsavelToPCI(parentItem.id).catch(err => 
+        console.error('Erro ao copiar responsável:', err)
+      );
     }
 
-    console.log(`👤 Item pai encontrado: "${parentItem.name}" (ID: ${parentItem.id})`);
+    // 3. AÇÃO: Atualizar colunas no item pai baseado no tipo de subitem (MANTIDO PARA OS CASOS ESPECÍFICOS)
+    const itemName = item.name.toUpperCase();
+    const isUnificacaoIniciada = itemName.includes('UNIFICAÇÃO INICIADA');
+    const isDesmembramentoIniciado = itemName.includes('DESMEMBRAMENTO INICIADO');
+    const isProjIniciado = itemName.includes('PROJETO INICIADO');
+    const isDocEmitirAlvara = itemName.includes('DOC - EMITIR ALVARÁ');
 
-    if (isUnificacaoIniciada) {
-      await updateStatusColumn(parentItem, 'DOC EXTERNO', 'DOC - UNIFICAÇÃO');
-      console.log(`✅ DOC - UNIFICAÇÃO aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
-    } 
-    else if (isDesmembramentoIniciado) {
-      await updateStatusColumn(parentItem, 'DOC EXTERNO', 'DOC - DESMEMBRAMENTO');
-      console.log(`✅ DOC - DESMEMBRAMENTO aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
-    }
-    else if (isProjIniciado) {
-      // Para PROJ INICIADO: atualiza duas colunas
-      await updateStatusColumn(parentItem, 'O. S.', 'PCI/MEMORIAL');
-      await updateStatusColumn(parentItem, 'DOC EXTERNO', 'EMITIR ALVARÁ');
-      console.log(`✅ PCI/MEMORIAL aplicado na coluna O.S. do item pai ${parentItem.id}`);
-      console.log(`✅ EMITIR ALVARÁ aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
-    }
-    else if (isDocEmitirAlvara) {
-      await updateStatusColumn(parentItem, 'DOC EXTERNO', 'ALVARÁ EMITIDO');
-      console.log(`✅ ALVARÁ EMITIDO aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
+    if (parentItem && (isUnificacaoIniciada || isDesmembramentoIniciado || isProjIniciado || isDocEmitirAlvara)) {
+      console.log(`👤 Item pai encontrado: "${parentItem.name}" (ID: ${parentItem.id})`);
+
+      if (isUnificacaoIniciada) {
+        await updateStatusColumn(parentItem, 'DOC EXTERNO', 'DOC - UNIFICAÇÃO');
+        console.log(`✅ DOC - UNIFICAÇÃO aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
+      } 
+      else if (isDesmembramentoIniciado) {
+        await updateStatusColumn(parentItem, 'DOC EXTERNO', 'DOC - DESMEMBRAMENTO');
+        console.log(`✅ DOC - DESMEMBRAMENTO aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
+      }
+      else if (isProjIniciado) {
+        // Para PROJ INICIADO: atualiza duas colunas
+        await updateStatusColumn(parentItem, 'O. S.', 'PCI/MEMORIAL');
+        await updateStatusColumn(parentItem, 'DOC EXTERNO', 'EMITIR ALVARÁ');
+        console.log(`✅ PCI/MEMORIAL aplicado na coluna O.S. do item pai ${parentItem.id}`);
+        console.log(`✅ EMITIR ALVARÁ aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
+      }
+      else if (isDocEmitirAlvara) {
+        await updateStatusColumn(parentItem, 'DOC EXTERNO', 'ALVARÁ EMITIDO');
+        console.log(`✅ ALVARÁ EMITIDO aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
+      }
     }
 
     console.log(`✅ Ações concluídas para subitem ${itemId}`);
