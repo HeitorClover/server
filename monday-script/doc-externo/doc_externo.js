@@ -64,6 +64,29 @@ async function getParentItem(subitemId) {
   }
 }
 
+// Obtém o board e colunas do subitem
+async function getSubitemBoardAndColumns(subitemId) {
+  const query = `query {
+    items(ids: ${subitemId}) {
+      id
+      board {
+        id
+        columns { id title type settings_str }
+      }
+    }
+  }`;
+  
+  try {
+    const data = await gql(query);
+    const item = data.items[0];
+    if (!item || !item.board) throw new Error(`Não achei board para subitem ${subitemId}`);
+    return { boardId: item.board.id, cols: item.board.columns || [] };
+  } catch (error) {
+    console.error(`Erro ao obter board do subitem ${subitemId}:`, error);
+    return null;
+  }
+}
+
 // Encontra coluna pelo título
 function findColumn(cols, title, expectedType) {
   if (!Array.isArray(cols)) return null;
@@ -77,26 +100,84 @@ function findColumn(cols, title, expectedType) {
   return cols.find(c => (c.title || '').toLowerCase().includes((title || '').toLowerCase())) || null;
 }
 
-// Atualiza a coluna de etiqueta do item pai
-async function updateParentItemLabel(parentItem, labelText) {
+// Função para setar data e hora atual (fornecida por você)
+async function setTodayDate(subitemId, boardId, columnId) {
+  const now = new Date();
+  const date = now.toISOString().split('T')[0];
+  const pad = n => String(n).padStart(2, '0');
+  const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+  const valueJson = JSON.stringify({ date, time });
+
+  const mutation = `mutation {
+    change_column_value(
+      board_id: ${boardId},
+      item_id: ${subitemId},
+      column_id: "${columnId}",
+      value: "${valueJson.replace(/"/g, '\\"')}"
+    ) { id }
+  }`;
+
   try {
-    // Procura coluna do tipo label (etiqueta) - comum para status/documentos
-    const labelColumn = findColumn(parentItem.board.columns, 'documentos', 'label') || 
-                       findColumn(parentItem.board.columns, 'status', 'label') ||
-                       findColumn(parentItem.board.columns, 'etiqueta', 'label') ||
-                       findColumn(parentItem.board.columns, 'doc', 'label');
-    
-    if (!labelColumn) {
-      console.warn(`Coluna de etiqueta não encontrada no item pai ${parentItem.id}`);
+    const res = await fetch('https://api.monday.com/v2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: API_KEY },
+      body: JSON.stringify({ query: mutation })
+    });
+    const json = await res.json();
+    console.log(`> setTodayDate result for ${subitemId}:`, JSON.stringify(json, null, 2));
+    return json;
+  } catch (err) {
+    console.error(`> Erro ao setar data/hora para ${subitemId}:`, err && err.message ? err.message : err);
+    throw err;
+  }
+}
+
+// Encontra coluna DOC EXTERNO no item pai
+function findDocExternoColumn(cols) {
+  if (!Array.isArray(cols)) return null;
+  
+  // Busca pelo título exato "DOC EXTERNO"
+  const exactMatch = cols.find(c => 
+    c.title && c.title.toUpperCase() === 'DOC EXTERNO'
+  );
+  if (exactMatch) return exactMatch;
+  
+  // Se não encontrar, busca por variações
+  const variations = cols.find(c => 
+    c.title && c.title.toUpperCase().includes('DOC EXTERNO')
+  );
+  
+  return variations || null;
+}
+
+// Atualiza a coluna DOC EXTERNO do item pai
+async function updateDocExternoColumn(parentItem, labelText) {
+  try {
+    if (!parentItem || !parentItem.board) {
+      console.warn('Item pai ou board não encontrado');
       return false;
     }
+
+    // Busca especificamente a coluna "DOC EXTERNO"
+    const docExternoColumn = findDocExternoColumn(parentItem.board.columns);
+    
+    if (!docExternoColumn) {
+      console.warn(`Coluna "DOC EXTERNO" não encontrada no item pai ${parentItem.id}`);
+      console.log('Colunas disponíveis:', parentItem.board.columns.map(c => `${c.title} (${c.type})`));
+      return false;
+    }
+
+    console.log(`> Coluna "DOC EXTERNO" encontrada: ${docExternoColumn.title} (${docExternoColumn.id})`);
+
+    const valueJson = JSON.stringify({ label: labelText });
+    const escapedValue = valueJson.replace(/"/g, '\\"');
 
     const mutation = `mutation {
       change_column_value(
         board_id: ${parentItem.board.id},
         item_id: ${parentItem.id},
-        column_id: "${labelColumn.id}",
-        value: "{\\"label\\":\\"${labelText}\\"}"
+        column_id: "${docExternoColumn.id}",
+        value: "${escapedValue}"
       ) { id }
     }`;
 
@@ -107,16 +188,22 @@ async function updateParentItemLabel(parentItem, labelText) {
     });
     
     const json = await res.json();
-    console.log(`> Etiqueta "${labelText}" atualizada no item pai ${parentItem.id}`);
+    
+    if (json.errors) {
+      console.error('Erros na mutation:', JSON.stringify(json.errors, null, 2));
+      return false;
+    }
+    
+    console.log(`✅ "${labelText}" aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
     return true;
   } catch (error) {
-    console.error(`Erro ao atualizar etiqueta no item pai ${parentItem.id}:`, error);
-    throw error;
+    console.error(`Erro ao atualizar coluna DOC EXTERNO no item pai ${parentItem.id}:`, error);
+    return false;
   }
 }
 
-// Obtém informações completas do item (incluindo valor da coluna de checkbox)
-async function getItemWithColumnValues(itemId) {
+// Obtém informações completas do item
+async function getItemDetails(itemId) {
   const query = `query {
     items(ids: ${itemId}) {
       id
@@ -136,9 +223,9 @@ async function getItemWithColumnValues(itemId) {
   
   try {
     const data = await gql(query);
-    return data.items[0];
+    return data.items ? data.items[0] : null;
   } catch (error) {
-    console.error(`Erro ao obter informações do item ${itemId}:`, error);
+    console.error(`Erro ao obter detalhes do item ${itemId}:`, error);
     return null;
   }
 }
@@ -168,8 +255,8 @@ async function processWebhookEvent(body) {
       return;
     }
 
-    // Obtém informações completas do item
-    const item = await getItemWithColumnValues(itemId);
+    // Obtém informações do item
+    const item = await getItemDetails(itemId);
     if (!item) {
       console.warn(`> Item ${itemId} não encontrado`);
       return;
@@ -177,13 +264,13 @@ async function processWebhookEvent(body) {
 
     console.log(`> Processando subitem: "${item.name}"`);
 
-    // Verifica se é UNIFICAÇÃO ou DESMEMBRAMENTO
+    // Verifica se é UNIFICAÇÃO INICIADA ou DESMEMBRAMENTO INICIADO
     const itemName = item.name.toUpperCase();
-    const isUnificacao = itemName.includes('UNIFICAÇÃO');
-    const isDesmembramento = itemName.includes('DESMEMBRAMENTO');
+    const isUnificacaoIniciada = itemName.includes('UNIFICAÇÃO INICIADA');
+    const isDesmembramentoIniciado = itemName.includes('DESMEMBRAMENTO INICIADO');
 
-    if (!isUnificacao && !isDesmembramento) {
-      console.log('> Subitem não é UNIFICAÇÃO nem DESMEMBRAMENTO, ignorando.');
+    if (!isUnificacaoIniciada && !isDesmembramentoIniciado) {
+      console.log('> Subitem não é UNIFICAÇÃO INICIADA nem DESMEMBRAMENTO INICIADO, ignorando.');
       return;
     }
 
@@ -214,7 +301,19 @@ async function processWebhookEvent(body) {
 
     console.log(`> Checkbox marcado detectado para: ${item.name}`);
 
-    // Obtém o item pai
+    // 1. AÇÃO: Atualizar coluna FINALIZAÇÃO no próprio subitem
+    const subitemBoardInfo = await getSubitemBoardAndColumns(itemId);
+    if (subitemBoardInfo) {
+      const finalizacaoColumn = findColumn(subitemBoardInfo.cols, 'FINALIZAÇÃO', 'date');
+      if (finalizacaoColumn) {
+        await setTodayDate(itemId, subitemBoardInfo.boardId, finalizacaoColumn.id);
+        console.log(`✅ Data/hora atual definida na coluna FINALIZAÇÃO do subitem ${itemId}`);
+      } else {
+        console.warn(`> Coluna "FINALIZAÇÃO" não encontrada no subitem ${itemId}`);
+      }
+    }
+
+    // 2. AÇÃO: Atualizar coluna DOC EXTERNO no item pai
     const parentItem = await getParentItem(itemId);
     if (!parentItem) {
       console.warn('> Item pai não encontrado');
@@ -223,14 +322,15 @@ async function processWebhookEvent(body) {
 
     console.log(`> Item pai encontrado: "${parentItem.name}" (ID: ${parentItem.id})`);
 
-    // Atualiza a etiqueta no item pai baseado no tipo
-    if (isUnificacao) {
-      await updateParentItemLabel(parentItem, 'DOC - UNIFICAÇÃO');
-      console.log(`✅ DOC - UNIFICAÇÃO aplicado ao item pai ${parentItem.id}`);
-    } else if (isDesmembramento) {
-      await updateParentItemLabel(parentItem, 'DOC - DESMEMBRAMENTO');
-      console.log(`✅ DOC - DESMEMBRAMENTO aplicado ao item pai ${parentItem.id}`);
+    if (isUnificacaoIniciada) {
+      await updateDocExternoColumn(parentItem, 'DOC - UNIFICAÇÃO');
+      console.log(`✅ DOC - UNIFICAÇÃO aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
+    } else if (isDesmembramentoIniciado) {
+      await updateDocExternoColumn(parentItem, 'DOC - DESMEMBRAMENTO');
+      console.log(`✅ DOC - DESMEMBRAMENTO aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
     }
+
+    console.log(`✅ Ações concluídas para subitem ${itemId}`);
 
   } catch (error) {
     console.error('Erro ao processar evento de webhook:', error);
