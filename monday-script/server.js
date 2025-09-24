@@ -350,6 +350,8 @@ async function processEvent(body) {
     // NOVA FUNCIONALIDADE: Para "ab matricula" e "emitir alvará" - atribuir usuário 69279625 após 20 segundos
     else if (statusText.toLowerCase().includes('ab matricula') ||
              statusText.toLowerCase().includes('fazer escritura') ||
+             statusText.toLowerCase().includes('doc - unificação') ||
+             statusText.toLowerCase().includes('doc - desmembramento') ||
              statusText.toLowerCase().includes('emitir alvará')) {
       
       console.log(`> Status "${statusText}" detectado. Atribuição do usuário 69279625 agendada para daqui a 20 segundos`);
