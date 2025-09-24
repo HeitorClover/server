@@ -150,24 +150,52 @@ function findDocExternoColumn(cols) {
   return variations || null;
 }
 
-// Atualiza a coluna DOC EXTERNO do item pai
-async function updateDocExternoColumn(parentItem, labelText) {
+// Encontra coluna O.S. no item pai
+function findOSColumn(cols) {
+  if (!Array.isArray(cols)) return null;
+  
+  // Busca por variações do nome "O. S."
+  const variations = [
+    'O. S.',
+    'O.S.',
+    'OS',
+    'ordem de serviço',
+    'ordem de servico'
+  ];
+  
+  for (const variation of variations) {
+    const column = cols.find(c => 
+      c.title && c.title.toUpperCase().includes(variation.toUpperCase())
+    );
+    if (column) return column;
+  }
+  
+  return null;
+}
+
+// Atualiza uma coluna de status do item pai com uma etiqueta específica
+async function updateStatusColumn(parentItem, columnName, labelText) {
   try {
     if (!parentItem || !parentItem.board) {
       console.warn('Item pai ou board não encontrado');
       return false;
     }
 
-    // Busca especificamente a coluna "DOC EXTERNO"
-    const docExternoColumn = findDocExternoColumn(parentItem.board.columns);
+    // Busca a coluna específica
+    let targetColumn = null;
     
-    if (!docExternoColumn) {
-      console.warn(`Coluna "DOC EXTERNO" não encontrada no item pai ${parentItem.id}`);
-      console.log('Colunas disponíveis:', parentItem.board.columns.map(c => `${c.title} (${c.type})`));
+    if (columnName === 'DOC EXTERNO') {
+      targetColumn = findDocExternoColumn(parentItem.board.columns);
+    } else if (columnName === 'O. S.') {
+      targetColumn = findOSColumn(parentItem.board.columns);
+    }
+    
+    if (!targetColumn) {
+      console.warn(`Coluna "${columnName}" não encontrada no item pai ${parentItem.id}`);
       return false;
     }
 
-    console.log(`> Coluna "DOC EXTERNO" encontrada: ${docExternoColumn.title} (${docExternoColumn.id})`);
+    console.log(`> Coluna "${columnName}" encontrada: ${targetColumn.title} (${targetColumn.id})`);
 
     const valueJson = JSON.stringify({ label: labelText });
     const escapedValue = valueJson.replace(/"/g, '\\"');
@@ -176,7 +204,7 @@ async function updateDocExternoColumn(parentItem, labelText) {
       change_column_value(
         board_id: ${parentItem.board.id},
         item_id: ${parentItem.id},
-        column_id: "${docExternoColumn.id}",
+        column_id: "${targetColumn.id}",
         value: "${escapedValue}"
       ) { id }
     }`;
@@ -194,10 +222,10 @@ async function updateDocExternoColumn(parentItem, labelText) {
       return false;
     }
     
-    console.log(`✅ "${labelText}" aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
+    console.log(`✅ "${labelText}" aplicado na coluna ${columnName} do item pai ${parentItem.id}`);
     return true;
   } catch (error) {
-    console.error(`Erro ao atualizar coluna DOC EXTERNO no item pai ${parentItem.id}:`, error);
+    console.error(`Erro ao atualizar coluna ${columnName} no item pai ${parentItem.id}:`, error);
     return false;
   }
 }
@@ -260,7 +288,7 @@ async function processWebhookEvent(body) {
     
     console.log('📥 Evento recebido:', JSON.stringify(event, null, 2));
 
-    // CORREÇÃO: Aceitar ambos os tipos de evento
+    // Aceitar ambos os tipos de evento
     if (event.type !== 'change_column_value' && event.type !== 'update_column_value') {
       console.log('⏭️ Não é evento de mudança de coluna, ignorando.');
       return;
@@ -273,8 +301,7 @@ async function processWebhookEvent(body) {
       return;
     }
 
-    // CORREÇÃO: Verificar se é uma coluna do tipo boolean (checkbox)
-    // Primeiro, vamos obter o título da coluna para verificar se é "sinal de confirmação"
+    // Verificar se é uma coluna do tipo boolean (checkbox)
     const columnTitle = await getColumnTitle(event.columnId);
     console.log(`> Título da coluna: ${columnTitle}`);
     
@@ -293,13 +320,14 @@ async function processWebhookEvent(body) {
 
     console.log(`🔍 Processando subitem: "${item.name}"`);
 
-    // Verifica se é UNIFICAÇÃO INICIADA ou DESMEMBRAMENTO INICIADO
+    // Verifica os tipos de subitem
     const itemName = item.name.toUpperCase();
     const isUnificacaoIniciada = itemName.includes('UNIFICAÇÃO INICIADA');
     const isDesmembramentoIniciado = itemName.includes('DESMEMBRAMENTO INICIADO');
+    const isProjIniciado = itemName.includes('PROJ INICIADO');
 
-    if (!isUnificacaoIniciada && !isDesmembramentoIniciado) {
-      console.log('⏭️ Subitem não é UNIFICAÇÃO INICIADA nem DESMEMBRAMENTO INICIADO, ignorando.');
+    if (!isUnificacaoIniciada && !isDesmembramentoIniciado && !isProjIniciado) {
+      console.log('⏭️ Subitem não é dos tipos esperados, ignorando.');
       return;
     }
 
@@ -343,7 +371,7 @@ async function processWebhookEvent(body) {
       }
     }
 
-    // 2. AÇÃO: Atualizar coluna DOC EXTERNO no item pai
+    // 2. AÇÃO: Atualizar colunas no item pai baseado no tipo de subitem
     const parentItem = await getParentItem(itemId);
     if (!parentItem) {
       console.warn('⚠️ Item pai não encontrado');
@@ -353,11 +381,19 @@ async function processWebhookEvent(body) {
     console.log(`👤 Item pai encontrado: "${parentItem.name}" (ID: ${parentItem.id})`);
 
     if (isUnificacaoIniciada) {
-      await updateDocExternoColumn(parentItem, 'DOC - UNIFICAÇÃO');
+      await updateStatusColumn(parentItem, 'DOC EXTERNO', 'DOC - UNIFICAÇÃO');
       console.log(`✅ DOC - UNIFICAÇÃO aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
-    } else if (isDesmembramentoIniciado) {
-      await updateDocExternoColumn(parentItem, 'DOC - DESMEMBRAMENTO');
+    } 
+    else if (isDesmembramentoIniciado) {
+      await updateStatusColumn(parentItem, 'DOC EXTERNO', 'DOC - DESMEMBRAMENTO');
       console.log(`✅ DOC - DESMEMBRAMENTO aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
+    }
+    else if (isProjIniciado) {
+      // Para PROJ INICIADO: atualiza duas colunas
+      await updateStatusColumn(parentItem, 'O. S.', 'PCI/MEMORIAL');
+      await updateStatusColumn(parentItem, 'DOC EXTERNO', 'EMITIR ALVARÁ');
+      console.log(`✅ PCI/MEMORIAL aplicado na coluna O.S. do item pai ${parentItem.id}`);
+      console.log(`✅ EMITIR ALVARÁ aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
     }
 
     console.log(`✅ Ações concluídas para subitem ${itemId}`);
