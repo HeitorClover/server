@@ -384,10 +384,10 @@ async function processEvent(body) {
       console.log(`> Status "${statusText}" detectado. Aguardando 15 segundos antes de copiar responsável...`);
       
       (async () => {
-        // Aguarda 15 segundos antes de processar
+        
         await new Promise(res => setTimeout(res, 15 * 1000));
         
-        // Revalida qual é o último subitem após 15 segundos
+        
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
         if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
           console.warn(`> Nenhum subitem encontrado após 15 segundos`);

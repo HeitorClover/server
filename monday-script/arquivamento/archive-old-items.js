@@ -1,4 +1,4 @@
-// archive-old-items-final.js
+// archive-old-items-list-and-archive.js
 const express = require('express');
 const bodyParser = require('body-parser');
 const fetch = require('node-fetch');
@@ -16,7 +16,8 @@ if (!API_KEY) {
 const rawBoardId = process.env.BOARD_ID || '7991681616';
 const BOARD_IDS = rawBoardId.toString().split(',').map(s => s.trim()).filter(Boolean);
 
-const DAYS = Number(process.env.DAYS || 202); // cutoff em dias
+const DAYS = Number(process.env.DAYS || 202);
+const DRY_RUN = (process.env.DRY_RUN || 'false').toLowerCase() === 'false';
 const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
 
 console.log('--------------------------------------------');
@@ -24,6 +25,7 @@ console.log(`STARTUP: ${new Date().toISOString()}`);
 console.log(`BOOT_ID: ${BOOT_ID}`);
 console.log(`MONDAY_BOARDS: ${JSON.stringify(BOARD_IDS)}`);
 console.log(`DAYS: ${DAYS}`);
+console.log(`DRY_RUN: ${DRY_RUN}`);
 console.log('--------------------------------------------');
 
 // --- Helper GraphQL ---
@@ -147,11 +149,8 @@ async function processBoardPage(boardId, cursor) {
 
 // --- Arquiva item ---
 async function archiveItem(itemId) {
-  const mutation = `
-    mutation ($itemId: ID!) {
-      archive_item(item_id: $itemId) { id }
-    }
-  `;
+  // Envia como ID! (string) para evitar problemas com IDs grandes
+  const mutation = `mutation ($itemId: ID!) { archive_item(item_id: $itemId) { id } }`;
   return gql(mutation, { itemId: itemId.toString() });
 }
 
@@ -181,13 +180,15 @@ async function runArchive() {
         if (!last) continue;
         if (last < cutoff) {
           console.log(`[CANDIDATO] ${it.id} "${it.name}" — last=${last.toISOString()}`);
-          try {
-            await archiveItem(it.id);
-            console.log(`[ARQUIVADO] ${it.id}`);
-            totalArchived++;
-            await new Promise(r => setTimeout(r, 200));
-          } catch (err) {
-            console.error(`[ERRO AO ARQUIVAR] ${it.id}:`, err);
+          if (!DRY_RUN) {
+            try {
+              await archiveItem(it.id); // <--- corrigido para string
+              console.log(`[ARQUIVADO] ${it.id}`);
+              totalArchived++;
+              await new Promise(r => setTimeout(r, 200));
+            } catch (err) {
+              console.error(`[ERRO AO ARQUIVAR] ${it.id}:`, err);
+            }
           }
         }
       }
@@ -207,7 +208,7 @@ async function runArchive() {
 app.get('/', (_req, res) => res.send(`Servidor rodando — BOOT_ID: ${BOOT_ID}`));
 
 app.post('/archive', (_req, res) => {
-  res.json({ ok: true, boot: BOOT_ID, started: new Date().toISOString() });
+  res.json({ ok: true, boot: BOOT_ID, dryRun: DRY_RUN, started: new Date().toISOString() });
   runArchive().then(() => console.log('>>> runArchive concluído sem erros'))
               .catch(err => console.error('Erro em runArchive:', err));
 });

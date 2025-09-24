@@ -7,8 +7,8 @@ app.use(express.json({ limit: "1mb" })); // Apenas express.json()
 
 // Configurações
 const MONDAY_API_KEY = process.env.MONDAY_API_KEY;
-const EVOLUTION_URL = "https://api.faleai.chat";
 const EVOLUTION_API_KEY = process.env.EVOLUTION_API_KEY;
+const EVOLUTION_URL = "https://api.faleai.chat";
 const SESSION_ID = "manager";
 const DESTINO = "5588998685336";
 const TARGET_PERSON_ID = "69279625";
