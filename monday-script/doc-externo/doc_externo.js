@@ -324,9 +324,10 @@ async function processWebhookEvent(body) {
     const itemName = item.name.toUpperCase();
     const isUnificacaoIniciada = itemName.includes('UNIFICAÇÃO INICIADA');
     const isDesmembramentoIniciado = itemName.includes('DESMEMBRAMENTO INICIADO');
-    const isProjIniciado = itemName.includes('PROJETO INICIADO');
+    const isProjIniciado = itemName.includes('PROJ INICIADO');
+    const isDocEmitirAlvara = itemName.includes('DOC - EMITIR ALVARÁ');
 
-    if (!isUnificacaoIniciada && !isDesmembramentoIniciado && !isProjIniciado) {
+    if (!isUnificacaoIniciada && !isDesmembramentoIniciado && !isProjIniciado && !isDocEmitirAlvara) {
       console.log('⏭️ Subitem não é dos tipos esperados, ignorando.');
       return;
     }
@@ -394,6 +395,10 @@ async function processWebhookEvent(body) {
       await updateStatusColumn(parentItem, 'DOC EXTERNO', 'EMITIR ALVARÁ');
       console.log(`✅ PCI/MEMORIAL aplicado na coluna O.S. do item pai ${parentItem.id}`);
       console.log(`✅ EMITIR ALVARÁ aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
+    }
+    else if (isDocEmitirAlvara) {
+      await updateStatusColumn(parentItem, 'DOC EXTERNO', 'ALVARÁ EMITIDO');
+      console.log(`✅ ALVARÁ EMITIDO aplicado na coluna DOC EXTERNO do item pai ${parentItem.id}`);
     }
 
     console.log(`✅ Ações concluídas para subitem ${itemId}`);
