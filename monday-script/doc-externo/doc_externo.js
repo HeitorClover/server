@@ -100,7 +100,7 @@ function findColumn(cols, title, expectedType) {
   return cols.find(c => (c.title || '').toLowerCase().includes((title || '').toLowerCase())) || null;
 }
 
-// Função para setar data e hora atual (fornecida por você)
+// Função para setar data e hora atual
 async function setTodayDate(subitemId, boardId, columnId) {
   const now = new Date();
   const date = now.toISOString().split('T')[0];
@@ -230,39 +230,68 @@ async function getItemDetails(itemId) {
   }
 }
 
+// Obtém o título da coluna pelo ID
+async function getColumnTitle(columnId) {
+  try {
+    const query = `query {
+      boards(limit: 1) {
+        columns(ids: ["${columnId}"]) {
+          title
+          type
+        }
+      }
+    }`;
+    
+    const data = await gql(query);
+    if (data.boards && data.boards.length > 0 && data.boards[0].columns.length > 0) {
+      return data.boards[0].columns[0].title;
+    }
+    return null;
+  } catch (error) {
+    console.error(`Erro ao obter título da coluna ${columnId}:`, error);
+    return null;
+  }
+}
+
 // Processa evento de webhook
 async function processWebhookEvent(body) {
   try {
     const event = body.event || {};
     
-    console.log('> Evento recebido:', JSON.stringify({
-      type: event.type,
-      pulseId: event.pulseId,
-      columnId: event.columnId,
-      value: event.value
-    }, null, 2));
+    console.log('📥 Evento recebido:', JSON.stringify(event, null, 2));
 
-    // Verifica se é um evento de mudança em coluna do tipo checkbox
-    if (event.type !== 'change_column_value') {
-      console.log('> Não é evento de mudança de coluna, ignorando.');
+    // CORREÇÃO: Aceitar ambos os tipos de evento
+    if (event.type !== 'change_column_value' && event.type !== 'update_column_value') {
+      console.log('⏭️ Não é evento de mudança de coluna, ignorando.');
       return;
     }
 
     // Obtém o ID do item (subitem)
     const itemId = event.pulseId || event.pulse_id;
     if (!itemId) {
-      console.warn('> ID do item não encontrado no evento');
+      console.warn('⚠️ ID do item não encontrado no evento');
+      return;
+    }
+
+    // CORREÇÃO: Verificar se é uma coluna do tipo boolean (checkbox)
+    // Primeiro, vamos obter o título da coluna para verificar se é "sinal de confirmação"
+    const columnTitle = await getColumnTitle(event.columnId);
+    console.log(`> Título da coluna: ${columnTitle}`);
+    
+    // Verifica se é a coluna correta (sinal de confirmação ou qualquer coluna boolean)
+    if (columnTitle && columnTitle.toLowerCase() !== 'sinal de confirmação') {
+      console.log(`⏭️ Coluna "${columnTitle}" não é "sinal de confirmação", ignorando.`);
       return;
     }
 
     // Obtém informações do item
     const item = await getItemDetails(itemId);
     if (!item) {
-      console.warn(`> Item ${itemId} não encontrado`);
+      console.warn(`⚠️ Item ${itemId} não encontrado`);
       return;
     }
 
-    console.log(`> Processando subitem: "${item.name}"`);
+    console.log(`🔍 Processando subitem: "${item.name}"`);
 
     // Verifica se é UNIFICAÇÃO INICIADA ou DESMEMBRAMENTO INICIADO
     const itemName = item.name.toUpperCase();
@@ -270,36 +299,37 @@ async function processWebhookEvent(body) {
     const isDesmembramentoIniciado = itemName.includes('DESMEMBRAMENTO INICIADO');
 
     if (!isUnificacaoIniciada && !isDesmembramentoIniciado) {
-      console.log('> Subitem não é UNIFICAÇÃO INICIADA nem DESMEMBRAMENTO INICIADO, ignorando.');
-      return;
-    }
-
-    // Encontra a coluna de checkbox no item
-    const checkboxColumn = item.column_values.find(cv => 
-      cv.column && cv.column.type === 'checkbox'
-    );
-
-    if (!checkboxColumn) {
-      console.warn('> Coluna de checkbox não encontrada no subitem');
+      console.log('⏭️ Subitem não é UNIFICAÇÃO INICIADA nem DESMEMBRAMENTO INICIADO, ignorando.');
       return;
     }
 
     // Verifica se o checkbox está marcado
     let isChecked = false;
     try {
-      const checkboxValue = JSON.parse(checkboxColumn.value || '{}');
-      isChecked = checkboxValue.checked === true;
+      // O valor do checkbox vem diretamente no evento
+      if (event.value && event.value.checked !== undefined) {
+        isChecked = event.value.checked === true;
+      } else {
+        // Se não veio no evento, busca da coluna
+        const checkboxColumn = item.column_values.find(cv => 
+          cv.column && (cv.column.type === 'boolean' || cv.column.type === 'checkbox')
+        );
+        if (checkboxColumn) {
+          const checkboxValue = JSON.parse(checkboxColumn.value || '{}');
+          isChecked = checkboxValue.checked === true;
+        }
+      }
     } catch (e) {
-      console.warn('> Não foi possível parsear valor do checkbox:', checkboxColumn.value);
+      console.warn('⚠️ Não foi possível determinar estado do checkbox');
       return;
     }
 
     if (!isChecked) {
-      console.log('> Checkbox não está marcado, ignorando.');
+      console.log('⏭️ Checkbox não está marcado, ignorando.');
       return;
     }
 
-    console.log(`> Checkbox marcado detectado para: ${item.name}`);
+    console.log(`✅ Checkbox marcado detectado para: ${item.name}`);
 
     // 1. AÇÃO: Atualizar coluna FINALIZAÇÃO no próprio subitem
     const subitemBoardInfo = await getSubitemBoardAndColumns(itemId);
@@ -309,18 +339,18 @@ async function processWebhookEvent(body) {
         await setTodayDate(itemId, subitemBoardInfo.boardId, finalizacaoColumn.id);
         console.log(`✅ Data/hora atual definida na coluna FINALIZAÇÃO do subitem ${itemId}`);
       } else {
-        console.warn(`> Coluna "FINALIZAÇÃO" não encontrada no subitem ${itemId}`);
+        console.warn(`⚠️ Coluna "FINALIZAÇÃO" não encontrada no subitem ${itemId}`);
       }
     }
 
     // 2. AÇÃO: Atualizar coluna DOC EXTERNO no item pai
     const parentItem = await getParentItem(itemId);
     if (!parentItem) {
-      console.warn('> Item pai não encontrado');
+      console.warn('⚠️ Item pai não encontrado');
       return;
     }
 
-    console.log(`> Item pai encontrado: "${parentItem.name}" (ID: ${parentItem.id})`);
+    console.log(`👤 Item pai encontrado: "${parentItem.name}" (ID: ${parentItem.id})`);
 
     if (isUnificacaoIniciada) {
       await updateDocExternoColumn(parentItem, 'DOC - UNIFICAÇÃO');
@@ -333,7 +363,7 @@ async function processWebhookEvent(body) {
     console.log(`✅ Ações concluídas para subitem ${itemId}`);
 
   } catch (error) {
-    console.error('Erro ao processar evento de webhook:', error);
+    console.error('❌ Erro ao processar evento de webhook:', error);
   }
 }
 
@@ -343,7 +373,7 @@ app.post('/webhook', (req, res) => {
   
   // Resposta ao challenge do Monday
   if (body.challenge) {
-    console.log('> Challenge recebido:', body.challenge);
+    console.log('🔐 Challenge recebido:', body.challenge);
     return res.status(200).json({ challenge: body.challenge });
   }
   
@@ -351,7 +381,7 @@ app.post('/webhook', (req, res) => {
   
   // Processa o evento assincronamente
   processWebhookEvent(body).catch(err => 
-    console.error('Erro no processWebhookEvent:', err)
+    console.error('💥 Erro no processWebhookEvent:', err)
   );
 });
 
