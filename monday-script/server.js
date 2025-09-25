@@ -18,14 +18,36 @@ const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
 const DATE_COL_TITLE = 'FINALIZAÇÃO';
 
 // Status aceitos
+
 const ACCEPT = [
-  'abrir conta','comercial','documentos','caixaaqui','doc pendente','assinatura','restrição',
-  'conformidade','avaliação','conta ativa','desist/demora','aprovado','condicionado','reprovado', 'analise',
-  'ab matricula', 'fazer escritura', 'emitir alvará', 'alvara emitido', 'abrir o. s.', 'criar projeto', 'unificação' , 'desmembramento', 'proj iniciado', 'pci/memorial' , 'engenharia',
-  'concluido','siopi','solicitada', 'assinatura', 'desmembramento iniciado', 'unificação iniciada', 'doc - unificação' , 'doc - desmembramento'
-  , 'enviar conformidade', 'conformidade' , 'conforme', 'solicitar minuta' , 'contrato marcado' , 'minuta editada' , 
-  'contrado assinado' , 'garantia' , 'garantia conforme' , 'reanálise' , 'cadastro' , 'processos parados' , 'assinatura de contrato' ,
-  'medições' , 'aprovados cb'
+//  01 - Atendimento: 
+  'abrir conta', 'documentos', 'caixaaqui', 'assinatura', 'conformidade', 'conta ativa', 
+  'comercial', 'doc pendente', 'restrição', 'avaliação', 'desist/demora',
+
+// 02 - Avaliação:
+  'aprovado', 'aprovados cb', 'condicionado', 'reprovado', 'analise', 'engenharia', 'projetos',  
+
+// Vendas CB 
+  'aprovados cb', 'visita', 'fechado cb', 'desistente',
+
+// 03 - Projetos:
+  'abrir o. s.', 'criar projeto', 'proj iniciado', 'unificação', 'unificação iniciada', 
+  'desmembramento', 'desmembramento iniciado', 'pci/memorial', 'engenharia',
+
+  'ab matricula', 'fazer escritura', 'doc - unificação', 'doc - desmembramento', 
+  'emitir alvará', 'alvara emitido',
+
+// 04 - Engenharia:
+  'solicitada', 'eng. sem clientes', 'siopi',
+
+// 05 - Siopi:
+  'assinatura', 'enviar conformidade', 'conformidade', 'conforme',
+
+// 06 - Assinatura de Contrato:
+  'solicitar minuta', 'editar minuta', 'minuta editada', 'contrado assinado', 'garantia', 'garantia conforme',
+
+// Outros:
+  'concluido', 'reanálise', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 
 ];
 
 // Status que NÃO devem marcar a coluna CONCLUIDO
