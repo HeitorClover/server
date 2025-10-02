@@ -34,6 +34,8 @@ const ACCEPT = [
   'abrir o. s.', 'criar projeto', 'proj iniciado', 'unificação', 'unificação iniciada', 
   'desmembramento', 'desmembramento iniciado', 'pci/memorial', 'engenharia',
 
+  'ab matricula', 'fazer escritura', 'doc - unificação', 'doc - desmembramento', 'emitir alvará',
+
 // 04 - Engenharia:
   'solicitada', 'eng. sem clientes', 'siopi',
 
