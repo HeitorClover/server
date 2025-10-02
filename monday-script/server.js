@@ -18,25 +18,42 @@ const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
 const DATE_COL_TITLE = 'FINALIZAÇÃO';
 
 // Status aceitos
+
 const ACCEPT = [
-  'abrir conta', 'documentos', 'caixaaqui', 'assinatura', 'conformidade', 'conta ativa',
+//  01 - Atendimento: 
+  'abrir conta', 'documentos', 'caixaaqui', 'assinatura', 'conformidade', 'conta ativa', 
   'comercial', 'doc pendente', 'restrição', 'avaliação', 'desist/demora',
-  'aprovado', 'aprovados cb', 'condicionado', 'reprovado', 'analise', 'engenharia', 'projetos',
+
+// 02 - Avaliação:
+  'aprovado', 'aprovados cb', 'condicionado', 'reprovado', 'analise', 'engenharia', 'projetos',  
+
+// Vendas CB 
   'aprovados cb', 'visita', 'fechado cb', 'desistente',
-  'abrir o. s.', 'criar projeto', 'proj iniciado', 'unificação', 'unificação iniciada',
+
+// 03 - Projetos:
+  'abrir o. s.', 'criar projeto', 'proj iniciado', 'unificação', 'unificação iniciada', 
   'desmembramento', 'desmembramento iniciado', 'pci/memorial', 'engenharia',
+
+// 04 - Engenharia:
   'solicitada', 'eng. sem clientes', 'siopi',
+
+// 05 - Siopi:
   'assinatura', 'enviar conformidade', 'conformidade', 'conforme',
+
+// 06 - Assinatura de Contrato:
   'solicitar minuta', 'editar minuta', 'minuta editada', 'contrado assinado', 'garantia', 'garantia conforme',
-  'concluido', 'reanálise', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições',
+
+// Outros:
+  'concluido', 'reanálise', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 
 ];
 
+// Status que NÃO devem marcar a coluna CONCLUIDO
 const EXCLUDE_FROM_COMPLETED = [''];
 
 // Subitens que NÃO devem receber data e check
 const EXCLUDED_SUBITEM_NAMES = [
   'DOC - AB MATRICULA',
-  'DOC - FAZER ESCRITURA',
+  'DOC - FAZER ESCRITURA', 
   'DOC - UNIFICAÇÃO',
   'DOC - DESMEMBRAMENTO',
   'DOC - EMITIR ALVARÁ',
@@ -369,13 +386,11 @@ async function processEvent(body) {
     }
 
     // NOVA FUNCIONALIDADE: Para "ab matricula" e "emitir alvará" - atribuir usuário 69279625 após 20 segundos
-    else if (
-      statusText.toLowerCase().includes('ab matricula') ||
-      statusText.toLowerCase().includes('fazer escritura') ||
-      statusText.toLowerCase().includes('doc - unificação') ||
-      statusText.toLowerCase().includes('doc - desmembramento') ||
-      statusText.toLowerCase().includes('emitir alvará')
-    ) {
+    else if (statusText.toLowerCase().includes('ab matricula') ||
+             statusText.toLowerCase().includes('fazer escritura') ||
+             statusText.toLowerCase().includes('doc - unificação') ||
+             statusText.toLowerCase().includes('doc - desmembramento') ||
+             statusText.toLowerCase().includes('emitir alvará')) {
       
       console.log(`> Status "${statusText}" detectado. Atribuição do usuário 69279625 agendada para daqui a 20 segundos`);
       
@@ -392,34 +407,9 @@ async function processEvent(body) {
         const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
         console.log(`> Último subitem após 20 segundos: "${lastSubitemAfterDelay.name}"`);
         
-        // Lista dos nomes alvo (exatos ou contidos) que devem receber o usuário 69279625
-        const TARGET_DOC_NAMES = [
-          'DOC - AB MATRICULA',
-          'DOC - UNIFICAÇÃO',
-          'DOC - DESMEMBRAMENTO',
-          'DOC - EMITIR ALVARÁ',
-          'DOC - FAZER ESCRITURA'
-        ];
-        
-        const lastNameUpper = (lastSubitemAfterDelay.name || '').trim().toUpperCase();
-        const shouldAssign = TARGET_DOC_NAMES.some(target => {
-          const t = target.toUpperCase();
-          return lastNameUpper === t || lastNameUpper.includes(t);
-        });
-
-        if (!shouldAssign) {
-          console.log(`> Último subitem "${lastSubitemAfterDelay.name}" não é um dos tipos DOC alvo. Abortando atribuição de 69279625.`);
-          return;
-        }
-
-        // Obter board/cols e atribuir usuário somente se for um dos tipos alvo
-        try {
-          const { boardId: boardIdAfterDelay, cols: colsAfterDelay } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
-          await assignUserToSubitem(lastSubitemAfterDelay.id, boardIdAfterDelay, colsAfterDelay, 69279625);
-          console.log(`> Usuário 69279625 atribuído ao subitem ${lastSubitemAfterDelay.id} (${lastSubitemAfterDelay.name})`);
-        } catch (errAssign) {
-          console.error(`> Erro ao atribuir usuário 69279625 ao subitem ${lastSubitemAfterDelay.id}:`, errAssign && errAssign.message ? errAssign.message : errAssign);
-        }
+        const { boardId: boardIdAfterDelay, cols: colsAfterDelay } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        await assignUserToSubitem(lastSubitemAfterDelay.id, boardIdAfterDelay, colsAfterDelay, 69279625);
+        console.log(`> Usuário 69279625 atribuído ao subitem ${lastSubitemAfterDelay.id} (${statusText})`);
       })();
     }
 
@@ -435,7 +425,9 @@ async function processEvent(body) {
       console.log(`> Status "${statusText}" detectado. Aguardando 15 segundos antes de copiar responsável...`);
       
       (async () => {
+        
         await new Promise(res => setTimeout(res, 15 * 1000));
+        
         
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
         if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
@@ -488,4 +480,3 @@ app.get('/webhook', (_req, res) => res.json({ status: 'ok', now: new Date().toIS
 
 const PORT = process.env.PORT || 1000;
 app.listen(PORT, () => console.log(`🚀 Server rodando na porta ${PORT} — BOOT_ID: ${BOOT_ID}`));
-
