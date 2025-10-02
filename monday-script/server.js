@@ -18,7 +18,6 @@ const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
 const DATE_COL_TITLE = 'FINALIZAÇÃO';
 
 // Status aceitos
-
 const ACCEPT = [
 //  01 - Atendimento: 
   'abrir conta', 'documentos', 'caixaaqui', 'assinatura', 'conformidade', 'conta ativa', 
@@ -60,6 +59,15 @@ const EXCLUDED_SUBITEM_NAMES = [
   'DOC - DESMEMBRAMENTO',
   'DOC - EMITIR ALVARÁ',
   'DOC - ALVARÁ EMITIDO'
+];
+
+// Status que só atribuem usuário (não colocam data/check)
+const STATUS_ONLY_ASSIGN = [
+  'ab matricula',
+  'fazer escritura',
+  'doc - unificação',
+  'doc - desmembramento',
+  'emitir alvará'
 ];
 
 console.log('--------------------------------------------');
@@ -360,12 +368,16 @@ async function processEvent(body) {
       }
     }
 
-    // VERIFICAÇÃO: Não aplicar data/check se o subitem estiver na lista de exclusão
-    if (!isSubitemExcluded(lastSubitem.name)) {
+    // VERIFICAÇÃO: Não aplicar data/check se o subitem estiver na lista de exclusão OU se o status for apenas de atribuição
+    const isStatusOnlyAssign = STATUS_ONLY_ASSIGN.some(status => 
+      statusText.toLowerCase().includes(status.toLowerCase())
+    );
+
+    if (!isSubitemExcluded(lastSubitem.name) && !isStatusOnlyAssign) {
       // Ações padrão para o último subitem (data + check)
       await applyStandardActions(lastSubitem.id, boardId, cols, statusText);
     } else {
-      console.log(`> Subitem "${lastSubitem.name}" está na lista de exclusão. Pulando data e check.`);
+      console.log(`> Subitem "${lastSubitem.name}" está na lista de exclusão ou o status é apenas de atribuição. Pulando data e check.`);
     }
 
     // NOVA LÓGICA: Atribuição de usuários específica por status
@@ -387,7 +399,7 @@ async function processEvent(body) {
       })();
     }
 
-    // NOVA FUNCIONALIDADE: Para "ab matricula" e "emitir alvará" - atribuir usuário 69279625 após 20 segundos
+    // NOVA FUNCIONALIDADE: Para documentos - atribuir usuário 69279625 após 20 segundos (SEM data/check)
     else if (statusText.toLowerCase().includes('ab matricula') ||
              statusText.toLowerCase().includes('fazer escritura') ||
              statusText.toLowerCase().includes('doc - unificação') ||
@@ -427,9 +439,7 @@ async function processEvent(body) {
       console.log(`> Status "${statusText}" detectado. Aguardando 15 segundos antes de copiar responsável...`);
       
       (async () => {
-        
         await new Promise(res => setTimeout(res, 15 * 1000));
-        
         
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
         if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
