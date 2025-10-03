@@ -27,7 +27,7 @@ const ACCEPT = [
   'aprovado', 'aprovados cb', 'condicionado', 'reprovado', 'analise', 'engenharia', 'projetos',  
 
 // Vendas CB 
-  'aprovados cb', 'visita', 'fechado cb', 'desistente', 
+  'aprovados cb', 'visita', 'fechado cb', 'escolha de projeto', 'desistente', 
 
 // 03 - Projetos:
   'abrir o. s.', 'criar projeto', 'proj iniciado', 'unificação', 'unificação iniciada', 
