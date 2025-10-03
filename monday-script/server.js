@@ -27,7 +27,7 @@ const ACCEPT = [
   'aprovado', 'aprovados cb', 'condicionado', 'reprovado', 'analise', 'engenharia', 'projetos',  
 
 // Vendas CB 
-  'aprovados cb', 'visita', 'fechado cb', 'desistente',
+  'aprovados cb', 'visita', 'fechado cb', 'desistente', 
 
 // 03 - Projetos:
   'abrir o. s.', 'criar projeto', 'proj iniciado', 'unificação', 'unificação iniciada', 
@@ -36,13 +36,16 @@ const ACCEPT = [
   'ab matricula', 'fazer escritura', 'doc - unificação', 'doc - desmembramento', 'emitir alvará',
 
 // 04 - Engenharia:
-  'solicitada', 'eng. sem clientes', 'siopi',
+  'solicitada', 'eng. sem clientes', 'siopi', 
 
 // 05 - Siopi:
   'assinatura', 'enviar conformidade', 'conformidade', 'conforme',
 
+  'atualizar matricula', 'matricula atualizada',
+
 // 06 - Assinatura de Contrato:
-  'solicitar minuta', 'editar minuta', 'minuta editada', 'contrado assinado', 'garantia', 'garantia conforme',
+  'solicitar minuta', 'editar minuta', 'minuta editada', 'contrado assinado', 'registro em cartório',
+  'garantia', 'garantia conforme', 'habite-se', 'averbação cartório',
 
 // Outros:
   'concluido', 'reanálise', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 
@@ -58,7 +61,8 @@ const EXCLUDED_SUBITEM_NAMES = [
   'DOC - UNIFICAÇÃO',
   'DOC - DESMEMBRAMENTO',
   'DOC - EMITIR ALVARÁ',
-  'DOC - ALVARÁ EMITIDO'
+  'DOC - ALVARÁ EMITIDO',
+  'DOC - ATUALIZAR MATRICULA'
 ];
 
 // Status que só atribuem usuário (não colocam data/check)
@@ -66,6 +70,7 @@ const STATUS_ONLY_ASSIGN = [
   'ab matricula',
   'fazer escritura',
   'doc - unificação',
+  'atualizar matricula',
   'doc - desmembramento',
   'emitir alvará'
 ];
@@ -404,6 +409,9 @@ async function processEvent(body) {
              statusText.toLowerCase().includes('fazer escritura') ||
              statusText.toLowerCase().includes('doc - unificação') ||
              statusText.toLowerCase().includes('doc - desmembramento') ||
+             statusText.toLowerCase().includes('atualizar matricula') ||
+             statusText.toLowerCase().includes('habite-se') ||
+             statusText.toLowerCase().includes('averbação cartório') ||
              statusText.toLowerCase().includes('emitir alvará')) {
       
       console.log(`> Status "${statusText}" detectado. Atribuição do usuário 69279625 agendada para daqui a 20 segundos`);
