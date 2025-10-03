@@ -31,7 +31,7 @@ const ACCEPT = [
 
 // 03 - Projetos:
   'abrir o. s.', 'criar projeto', 'proj iniciado', 'unificação', 'unificação iniciada', 
-  'desmembramento', 'desmembramento iniciado', 'pci/memorial', 'engenharia',
+  'desmembramento', 'desmembramento iniciado', 'pci/memorial', 'projeto completo', 'engenharia',
 
   'ab matricula', 'fazer escritura', 'doc - unificação', 'doc - desmembramento', 'emitir alvará',
 
