@@ -31,9 +31,11 @@ const ACCEPT = [
 
 // 03 - Projetos:
   'abrir o. s.', 'criar projeto', 'proj iniciado', 'unificação', 'unificação iniciada', 
-  'desmembramento', 'desmembramento iniciado', 'pci/memorial', 'projeto completo', 'engenharia',
+  'desmembramento', 'desmembramento iniciado', 'pci/memoriais', 'projeto completo', 'engenharia',
 
   'ab matricula', 'fazer escritura', 'doc - unificação', 'doc - desmembramento', 'emitir alvará',
+
+  'scpo', 'cno',
 
 // 04 - Engenharia:
   'solicitada', 'eng. sem clientes', 'siopi', 
@@ -62,7 +64,9 @@ const EXCLUDED_SUBITEM_NAMES = [
   'DOC - DESMEMBRAMENTO',
   'DOC - EMITIR ALVARÁ',
   'DOC - ALVARÁ EMITIDO',
-  'DOC - ATUALIZAR MATRICULA'
+  'DOC - ATUALIZAR MATRICULA',
+  'ENG - SCPO',
+  'ENG - CNO'
 ];
 
 // Status que só atribuem usuário (não colocam data/check)
@@ -72,7 +76,9 @@ const STATUS_ONLY_ASSIGN = [
   'doc - unificação',
   'atualizar matricula',
   'doc - desmembramento',
-  'emitir alvará'
+  'emitir alvará',
+  'cno',
+  'scpo'
 ];
 
 console.log('--------------------------------------------');
@@ -385,7 +391,7 @@ async function processEvent(body) {
       console.log(`> Subitem "${lastSubitem.name}" está na lista de exclusão ou o status é apenas de atribuição. Pulando data e check.`);
     }
 
-    // NOVA LÓGICA: Atribuição de usuários específica por status
+    // Colocar Maryanna ao abrir o.s.
     if (statusText.toLowerCase().includes('abrir o. s.')) {
       console.log(`> Atribuição do usuário 69279799 agendada para daqui a 20 segundos`);
       (async () => {
@@ -404,7 +410,27 @@ async function processEvent(body) {
       })();
     }
 
-    // NOVA FUNCIONALIDADE: Para documentos - atribuir usuário 69279625 após 20 segundos (SEM data/check)
+    // Colonar Bruna na Engenharia
+    if (statusText.toLowerCase().includes('scpo') ||
+      statusText.toLowerCase().includes('cno')) {
+      console.log(`> Atribuição do usuário 69279560 agendada para daqui a 20 segundos`);
+      (async () => {
+        await new Promise(res => setTimeout(res, 20 * 1000));
+        
+        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+          console.warn(`> Nenhum subitem encontrado após 20 segundos`);
+          return;
+        }
+        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+        
+        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        await assignUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69279560);
+        console.log(`> Usuário 69279560 atribuído ao subitem ${lastSubitemAfterDelay.id} (cno ou scpo)`);
+      })();
+    }
+
+    // Colocar Henrique nos Documentos
     else if (statusText.toLowerCase().includes('ab matricula') ||
              statusText.toLowerCase().includes('fazer escritura') ||
              statusText.toLowerCase().includes('doc - unificação') ||
@@ -441,7 +467,7 @@ async function processEvent(body) {
              statusText.toLowerCase().includes('unificação') ||
              statusText.toLowerCase().includes('unificação iniciada') ||
              statusText.toLowerCase().includes('desmembramento') ||
-             statusText.toLowerCase().includes('pci/memorial') ||
+             statusText.toLowerCase().includes('pci/memoriais') ||
              statusText.toLowerCase().includes('desmembramento iniciado')) {
       
       console.log(`> Status "${statusText}" detectado. Aguardando 15 segundos antes de copiar responsável...`);
