@@ -397,7 +397,7 @@ async function processEvent(body) {
     if (statusText.toLowerCase().includes('abrir o. s.')) {
       console.log(`> Atribuição do usuário 69279799 agendada para daqui a 20 segundos`);
       (async () => {
-        await new Promise(res => setTimeout(res, 20 * 1000));
+        await new Promise(res => setTimeout(res, 5 * 1000));
         
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
         if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
@@ -417,7 +417,7 @@ async function processEvent(body) {
       statusText.toLowerCase().includes('cno')) {
       console.log(`> Atribuição do usuário 69279560 agendada para daqui a 20 segundos`);
       (async () => {
-        await new Promise(res => setTimeout(res, 20 * 1000));
+        await new Promise(res => setTimeout(res, 5 * 1000));
         
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
         if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
@@ -446,7 +446,7 @@ async function processEvent(body) {
       console.log(`> Status "${statusText}" detectado. Atribuição do usuário 69279625 agendada para daqui a 20 segundos`);
       
       (async () => {
-        await new Promise(res => setTimeout(res, 20 * 1000));
+        await new Promise(res => setTimeout(res, 5 * 1000));
         
         // Revalida qual é o último subitem após 20 segundos
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
@@ -476,7 +476,7 @@ async function processEvent(body) {
       console.log(`> Status "${statusText}" detectado. Aguardando 15 segundos antes de copiar responsável...`);
       
       (async () => {
-        await new Promise(res => setTimeout(res, 15 * 1000));
+        await new Promise(res => setTimeout(res, 5 * 1000));
         
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
         if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
