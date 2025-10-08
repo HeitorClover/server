@@ -33,7 +33,7 @@ const ACCEPT = [
   'abrir o. s.', 'criar projeto', 'proj iniciado', 'unificação', 'unificação iniciada', 
   'desmembramento', 'desmembramento iniciado', 'pci/memoriais', 'projeto completo', 'engenharia',
 
-  'ab matricula', 'fazer escritura', 'doc - unificação', 'doc - desmembramento', 'emitir alvará',
+  'ab matricula', 'cartório/prefeitura', 'fazer escritura', 'doc - unificação', 'doc - desmembramento', 'emitir alvará',
 
   'scpo', 'cno',
 
@@ -61,6 +61,7 @@ const EXCLUDED_SUBITEM_NAMES = [
   'DOC - AB MATRICULA',
   'DOC - FAZER ESCRITURA', 
   'DOC - UNIFICAÇÃO',
+  'DOC - CARTÓRIO/PREFEITURA',
   'DOC - DESMEMBRAMENTO',
   'DOC - EMITIR ALVARÁ',
   'DOC - ALVARÁ EMITIDO',
@@ -77,6 +78,7 @@ const STATUS_ONLY_ASSIGN = [
   'atualizar matricula',
   'doc - desmembramento',
   'emitir alvará',
+  'cartório/prefeitura',
   'cno',
   'scpo'
 ];
@@ -436,6 +438,7 @@ async function processEvent(body) {
              statusText.toLowerCase().includes('doc - unificação') ||
              statusText.toLowerCase().includes('doc - desmembramento') ||
              statusText.toLowerCase().includes('atualizar matricula') ||
+             statusText.toLowerCase().includes('cartório/prefeitura') ||
              statusText.toLowerCase().includes('habite-se') ||
              statusText.toLowerCase().includes('averbação cartório') ||
              statusText.toLowerCase().includes('emitir alvará')) {
