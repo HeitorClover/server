@@ -438,17 +438,17 @@ async function processEvent(body) {
 
         // Colocar Henrique nos Documentos
         else if (statusText.toLowerCase().includes('ab matricula') ||
-            statusText.toLowerCase().includes('fazer escritura') ||
-            statusText.toLowerCase().includes('doc - unificação') ||
-            statusText.toLowerCase().includes('doc - desmembramento') ||
-            statusText.toLowerCase().includes('atualizar matricula') ||
-            statusText.toLowerCase().includes('cartório/prefeitura') ||
-            statusText.toLowerCase().includes('habite-se') ||
-            statusText.toLowerCase().includes('averbação cartório') ||
-            statusText.toLowerCase().includes('enel') ||
-            statusText.toLowerCase().includes('emitir alvará')) {
+             statusText.toLowerCase().includes('fazer escritura') ||
+             statusText.toLowerCase().includes('doc - unificação') ||
+             statusText.toLowerCase().includes('doc - desmembramento') ||
+             statusText.toLowerCase().includes('atualizar matricula') ||
+             statusText.toLowerCase().includes('cartório/prefeitura') ||
+             statusText.toLowerCase().includes('habite-se') ||
+             statusText.toLowerCase().includes('enel') ||
+             statusText.toLowerCase().includes('averbação cartório') ||
+             statusText.toLowerCase().includes('emitir alvará')) {
       
-      console.log(`> Status "${statusText}" detectado. Atribuição do usuário 69279625 agendada para daqui a 5 segundos`);
+      console.log(`> Status "${statusText}" detectado. Atribuição do usuário 69279625 agendada para daqui a 20 segundos`);
       
       (async () => {
         await new Promise(res => setTimeout(res, 5 * 1000));
@@ -460,25 +460,12 @@ async function processEvent(body) {
           return;
         }
         
-        let targetSubitem;
-        if (statusText.toLowerCase().includes('emitir alvará')) {
-          // Para "emitir alvará" usa o PENÚLTIMO subitem
-          if (subitemsAfterDelay.length >= 2) {
-            targetSubitem = subitemsAfterDelay[subitemsAfterDelay.length - 2];
-            console.log(`> Status "emitir alvará" detectado. Atribuindo ao PENÚLTIMO subitem: "${targetSubitem.name}"`);
-          } else {
-            targetSubitem = subitemsAfterDelay[subitemsAfterDelay.length - 1];
-            console.log(`> Status "emitir alvará" detectado, mas há apenas um subitem. Atribuindo ao último: "${targetSubitem.name}"`);
-          }
-        } else {
-          // Para outros status usa o ÚLTIMO subitem
-          targetSubitem = subitemsAfterDelay[subitemsAfterDelay.length - 1];
-          console.log(`> Último subitem após 5 segundos: "${targetSubitem.name}"`);
-        }
+        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+        console.log(`> Último subitem após 5 segundos: "${lastSubitemAfterDelay.name}"`);
         
-        const { boardId: boardIdAfterDelay, cols: colsAfterDelay } = await getSubitemBoardAndColumns(targetSubitem.id);
-        await assignUserToSubitem(targetSubitem.id, boardIdAfterDelay, colsAfterDelay, 69279625);
-        console.log(`> Usuário 69279625 atribuído ao subitem ${targetSubitem.id} (${statusText})`);
+        const { boardId: boardIdAfterDelay, cols: colsAfterDelay } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        await assignUserToSubitem(lastSubitemAfterDelay.id, boardIdAfterDelay, colsAfterDelay, 69279625);
+        console.log(`> Usuário 69279625 atribuído ao subitem ${lastSubitemAfterDelay.id} (${statusText})`);
       })();
     }
 
