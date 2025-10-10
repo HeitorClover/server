@@ -71,7 +71,8 @@ const EXCLUDED_SUBITEM_NAMES = [
   'EXE. PROJETO', 
   'DESMEMBRAMENTO',
   'UNIFICAÇÃO',
-  'CONTRATO DE EMPREITADA'
+  'CONTRATO DE EMPREITADA',
+  'CONTRATO DE COMPRA E VENDA'
 ];
 
 // Status que só atribuem usuário (não colocam data/check)
