@@ -445,6 +445,7 @@ async function processEvent(body) {
             statusText.toLowerCase().includes('cartório/prefeitura') ||
             statusText.toLowerCase().includes('habite-se') ||
             statusText.toLowerCase().includes('averbação cartório') ||
+            statusText.toLowerCase().includes('enel') ||
             statusText.toLowerCase().includes('emitir alvará')) {
       
       console.log(`> Status "${statusText}" detectado. Atribuição do usuário 69279625 agendada para daqui a 5 segundos`);
@@ -484,7 +485,7 @@ async function processEvent(body) {
     // NOVA FUNCIONALIDADE MODIFICADA: Para unificação, criar projeto e desmembramento - copiar responsável de "ESCOLHA DE PROJETO"
     else if (statusText.toLowerCase().includes('exe. projeto') ||
              statusText.toLowerCase().includes('unificação') ||
-             statusText.toLowerCase().includes('unificação') ||
+             statusText.toLowerCase().includes('cont. empreitada') ||
              statusText.toLowerCase().includes('pci/memoriais') ||
              statusText.toLowerCase().includes('desmembramento')) {
       
