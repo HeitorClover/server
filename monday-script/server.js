@@ -138,6 +138,25 @@ async function getSubitemBoardAndColumns(subitemId) {
   return { boardId: item.board.id, cols: item.board.columns || [] };
 }
 
+// Busca colunas do item pai
+async function getItemBoardAndColumns(itemId) {
+  const q = `query {
+    items(ids: ${itemId}) {
+      id
+      board {
+        id
+        name
+        columns { id title type settings_str }
+      }
+    }
+  }`;
+  console.log(`> Query board+columns do item pai ${itemId}`);
+  const data = await gql(q);
+  const item = data.items?.[0];
+  if (!item || !item.board) throw new Error(`Não achei board para item pai ${itemId}`);
+  return { boardId: item.board.id, cols: item.board.columns || [] };
+}
+
 // Encontra coluna
 function findColumn(cols, title, expectedType) {
   if (!Array.isArray(cols)) return null;
@@ -339,6 +358,48 @@ function isSubitemExcluded(subitemName) {
   );
 }
 
+// NOVA FUNÇÃO: Muda o status do item pai
+async function changeParentItemStatus(itemId, newStatus) {
+  try {
+    // Primeiro obtém o board e colunas do item pai
+    const { boardId, cols } = await getItemBoardAndColumns(Number(itemId));
+    
+    // Encontra a coluna de status (assumindo que se chama "Status" ou similar)
+    const statusCol = findColumn(cols, 'Status', 'status') || 
+                     findColumn(cols, 'status', 'status') ||
+                     findColumn(cols, 'Estado', 'status');
+    
+    if (!statusCol) {
+      console.warn(`> Coluna de Status não encontrada para o item pai ${itemId}`);
+      return false;
+    }
+
+    // Muda o status para ENGENHARIA
+    const mutation = `mutation {
+        change_column_value(
+            board_id: ${boardId},
+            item_id: ${itemId},
+            column_id: "${statusCol.id}",
+            value: "{\\"label\\":\\"${newStatus}\\"}"
+        ) { id }
+    }`;
+
+    const res = await fetch('https://api.monday.com/v2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: API_KEY },
+        body: JSON.stringify({ query: mutation })
+    });
+    
+    const json = await res.json();
+    console.log(`> Status do item pai ${itemId} alterado para "${newStatus}":`, JSON.stringify(json, null, 2));
+    return true;
+    
+  } catch (err) {
+    console.error(`> Erro ao alterar status do item pai ${itemId}:`, err);
+    return false;
+  }
+}
+
 // Processa webhook
 async function processEvent(body) {
   const ev = body.event || {};
@@ -399,13 +460,13 @@ async function processEvent(body) {
 
     // Colocar Maryanna ao abrir o.s.
     if (statusText.toLowerCase().includes('abrir o. s.')) {
-      console.log(`> Atribuição do usuário 69279799 agendada para daqui a 20 segundos`);
+      console.log(`> Atribuição do usuário 69279799 agendada para daqui a 5 segundos`);
       (async () => {
         await new Promise(res => setTimeout(res, 5 * 1000));
         
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
         if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
-          console.warn(`> Nenhum subitem encontrado após 20 segundos`);
+          console.warn(`> Nenhum subitem encontrado após 5 segundos`);
           return;
         }
         const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
@@ -438,14 +499,14 @@ async function processEvent(body) {
     if (statusText.toLowerCase().includes('scpo') ||
         statusText.toLowerCase().includes('cno')) {
       
-      console.log(`> Atribuição do usuário 69279560 agendada para daqui a 20 segundos`);
+      console.log(`> Atribuição do usuário 69279560 agendada para daqui a 5 segundos`);
       
       (async () => {
         await new Promise(res => setTimeout(res, 5 * 1000));
         
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
         if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
-          console.warn(`> Nenhum subitem encontrado após 20 segundos`);
+          console.warn(`> Nenhum subitem encontrado após 5 segundos`);
           return;
         }
         
@@ -521,28 +582,48 @@ async function processEvent(body) {
     }
 
     // NOVA FUNCIONALIDADE MODIFICADA: Para unificação, criar projeto e desmembramento - copiar responsável de "ESCOLHA DE PROJETO"
+    // COM ADIÇÃO DA VERIFICAÇÃO ESPECÍFICA PARA "CONT. EMPREITADA"
     else if (statusText.toLowerCase().includes('exe. projeto') ||
              statusText.toLowerCase().includes('unificação') ||
              statusText.toLowerCase().includes('cont. empreitada') ||
              statusText.toLowerCase().includes('pci/memoriais') ||
              statusText.toLowerCase().includes('desmembramento')) {
       
-      console.log(`> Status "${statusText}" detectado. Aguardando 15 segundos antes de copiar responsável...`);
+      console.log(`> Status "${statusText}" detectado. Aguardando 5 segundos antes de copiar responsável...`);
       
       (async () => {
         await new Promise(res => setTimeout(res, 5 * 1000));
         
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
         if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
-          console.warn(`> Nenhum subitem encontrado após 15 segundos`);
+          console.warn(`> Nenhum subitem encontrado após 5 segundos`);
           return;
         }
         
         const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
-        console.log(`> Último subitem após 15 segundos: "${lastSubitemAfterDelay.name}"`);
+        console.log(`> Último subitem após 5 segundos: "${lastSubitemAfterDelay.name}"`);
         
         // Obtém o board e colunas do último subitem atualizado
         const { boardId: boardIdAfterDelay, cols: colsAfterDelay } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        
+        // VERIFICAÇÃO ESPECÍFICA PARA "CONT. EMPREITADA"
+        if (statusText.toLowerCase().includes('cont. empreitada')) {
+            console.log(`> Verificando subitems específicos para "cont. empreitada"...`);
+            
+            const targetSubitemNames = ['ENG - SCPO', 'ENG - CNO', 'DOC - ENEL'];
+            const hasTargetSubitem = subitemsAfterDelay.some(subitem => 
+                targetSubitemNames.some(name => 
+                    subitem.name.toLowerCase().includes(name.toLowerCase())
+                )
+            );
+            
+            if (hasTargetSubitem) {
+                console.log(`> Subitem específico encontrado! Alterando status do item pai para ENGENHARIA...`);
+                await changeParentItemStatus(Number(itemId), 'ENGENHARIA');
+            } else {
+                console.log(`> Nenhum subitem específico (ENG - SCPO, ENG - CNO, DOC - ENEL) encontrado.`);
+            }
+        }
         
         // Procura o subitem "ESCOLHA DE PROJETO" após o delay
         console.log(`> Procurando responsável do subitem "ESCOLHA DE PROJETO"...`);
