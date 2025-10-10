@@ -30,10 +30,10 @@ const ACCEPT = [
   'aprovados cb', 'visita', 'fechado cb', 'escolha de projeto', 'desistente', 
 
 // 03 - Projetos:
-  'abrir o. s.', 'criar projeto', 'proj iniciado', 'unificação', 'unificação iniciada', 
-  'desmembramento', 'desmembramento iniciado', 'pci/memoriais', 'projeto completo', 'engenharia',
+  'abrir o. s.', 'exe. projeto',  'unificação', 'desmembramento',
+  'pci/memoriais','cont. empreitada', 'projeto completo', 'engenharia',
 
-  'ab matricula', 'cartório/prefeitura', 'fazer escritura', 'doc - unificação', 'doc - desmembramento', 'emitir alvará',
+  'ab matricula', 'cartório/prefeitura', 'fazer escritura', 'doc - unificação', 'doc - desmembramento', 'emitir alvará', 'enel',
 
   'scpo', 'cno',
 
@@ -67,7 +67,11 @@ const EXCLUDED_SUBITEM_NAMES = [
   'DOC - ALVARÁ EMITIDO',
   'DOC - ATUALIZAR MATRICULA',
   'ENG - SCPO',
-  'ENG - CNO'
+  'ENG - CNO', 
+  'EXE. PROJETO', 
+  'DESMEMBRAMENTO',
+  'UNIFICAÇÃO',
+  'CONTRATO DE EMPREITADA'
 ];
 
 // Status que só atribuem usuário (não colocam data/check)
@@ -478,13 +482,11 @@ async function processEvent(body) {
     }
 
     // NOVA FUNCIONALIDADE MODIFICADA: Para unificação, criar projeto e desmembramento - copiar responsável de "ESCOLHA DE PROJETO"
-    else if (statusText.toLowerCase().includes('criar projeto') || 
-             statusText.toLowerCase().includes('proj iniciado') ||
+    else if (statusText.toLowerCase().includes('exe. projeto') ||
              statusText.toLowerCase().includes('unificação') ||
-             statusText.toLowerCase().includes('unificação iniciada') ||
-             statusText.toLowerCase().includes('desmembramento') ||
+             statusText.toLowerCase().includes('unificação') ||
              statusText.toLowerCase().includes('pci/memoriais') ||
-             statusText.toLowerCase().includes('desmembramento iniciado')) {
+             statusText.toLowerCase().includes('desmembramento')) {
       
       console.log(`> Status "${statusText}" detectado. Aguardando 15 segundos antes de copiar responsável...`);
       
