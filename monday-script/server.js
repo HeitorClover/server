@@ -598,10 +598,10 @@ async function processEvent(body) {
     // NOVA FUNCIONALIDADE MODIFICADA: Para unificação, criar projeto e desmembramento - copiar responsável de "ESCOLHA DE PROJETO"
     // COM ADIÇÃO DA VERIFICAÇÃO ESPECÍFICA PARA "CONT. EMPREITADA"
     else if (statusText.toLowerCase().includes('exe. projeto') ||
-             statusText.toLowerCase().includes('unificação') ||
-             statusText.toLowerCase().includes('cont. empreitada') ||
-             statusText.toLowerCase().includes('pci/memoriais') ||
-             statusText.toLowerCase().includes('desmembramento')) {
+            statusText.toLowerCase().includes('unificação') ||
+            statusText.toLowerCase().includes('cont. empreitada') ||
+            statusText.toLowerCase().includes('pci/memoriais') ||
+            statusText.toLowerCase().includes('desmembramento')) {
       
       console.log(`> Status "${statusText}" detectado. Aguardando 5 segundos antes de copiar responsável...`);
       
@@ -614,11 +614,24 @@ async function processEvent(body) {
           return;
         }
         
-        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
-        console.log(`> Último subitem após 5 segundos: "${lastSubitemAfterDelay.name}"`);
+        // DETERMINA QUAL SUBITEM RECEBERÁ O RESPONSÁVEL
+        let targetSubitemForResponsible;
+        if (statusText.toLowerCase().includes('pci/memoriais')) {
+          // Para "pci/memoriais" usa o PENÚLTIMO subitem
+          if (subitemsAfterDelay.length >= 2) {
+            targetSubitemForResponsible = subitemsAfterDelay[subitemsAfterDelay.length - 2];
+            console.log(`> Status "pci/memoriais" detectado. Atribuindo responsável ao PENÚLTIMO subitem: "${targetSubitemForResponsible.name}"`);
+          } else {
+            targetSubitemForResponsible = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+            console.log(`> Status "pci/memoriais" detectado, mas há apenas um subitem. Atribuindo responsável ao último: "${targetSubitemForResponsible.name}"`);
+          }
+        } else {
+          // Para outros status usa o ÚLTIMO subitem
+          targetSubitemForResponsible = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+          console.log(`> Atribuindo responsável ao ÚLTIMO subitem: "${targetSubitemForResponsible.name}"`);
+        }
         
-        // Obtém o board e colunas do último subitem atualizado
-        const { boardId: boardIdAfterDelay, cols: colsAfterDelay } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        const { boardId: boardIdAfterDelay, cols: colsAfterDelay } = await getSubitemBoardAndColumns(targetSubitemForResponsible.id);
         
         // VERIFICAÇÃO ESPECÍFICA PARA "CONT. EMPREITADA"
         if (statusText.toLowerCase().includes('cont. empreitada')) {
@@ -648,9 +661,9 @@ async function processEvent(body) {
           
           const responsibleUserId = await getResponsibleFromSubitem(escolhaProjetoSubitem.id);
           if (responsibleUserId) {
-            console.log(`> Responsável encontrado: ${responsibleUserId}. Atribuindo ao último subitem...`);
-            await assignUserToSubitem(lastSubitemAfterDelay.id, boardIdAfterDelay, colsAfterDelay, responsibleUserId);
-            console.log(`> Responsável copiado de "ESCOLHA DE PROJETO" para o subitem ${lastSubitemAfterDelay.id}`);
+            console.log(`> Responsável encontrado: ${responsibleUserId}. Atribuindo ao subitem...`);
+            await assignUserToSubitem(targetSubitemForResponsible.id, boardIdAfterDelay, colsAfterDelay, responsibleUserId);
+            console.log(`> Responsável copiado de "ESCOLHA DE PROJETO" para o subitem ${targetSubitemForResponsible.id}`);
           } else {
             console.warn(`> Nenhum responsável encontrado no subitem "ESCOLHA DE PROJETO"`);
           }
