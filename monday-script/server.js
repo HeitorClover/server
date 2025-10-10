@@ -535,7 +535,7 @@ async function processEvent(body) {
         console.log(`> Usuário 69279560 atribuído ao subitem ${targetSubitem.id} (${statusText.toLowerCase().includes('scpo') ? 'scpo' : 'cno'})`);
 
         // NOVA REGRA: Verificação específica para ENG - CNO
-        if (statusText.toLowerCase().includes('eng - cno') || statusText.toLowerCase().includes('cno')) {
+        if (statusText.toLowerCase().includes('cno') || statusText.toLowerCase().includes('cno')) {
           console.log(`> Verificando existência do subitem "CONTRATO DE EMPREITADA" para ENG - CNO...`);
           
           const contratoEmpreitadaSubitem = await findSubitemByName(Number(itemId), 'CONTRATO DE EMPREITADA');
