@@ -417,24 +417,41 @@ async function processEvent(body) {
     }
 
     // Colonar Bruna na Engenharia
-    if (statusText.toLowerCase().includes('scpo') ||
-      statusText.toLowerCase().includes('cno')) {
-      console.log(`> Atribuição do usuário 69279560 agendada para daqui a 20 segundos`);
-      (async () => {
-        await new Promise(res => setTimeout(res, 5 * 1000));
+          if (statusText.toLowerCase().includes('scpo') ||
+          statusText.toLowerCase().includes('cno')) {
         
-        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
-        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
-          console.warn(`> Nenhum subitem encontrado após 20 segundos`);
-          return;
-        }
-        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+        console.log(`> Atribuição do usuário 69279560 agendada para daqui a 20 segundos`);
         
-        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
-        await assignUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69279560);
-        console.log(`> Usuário 69279560 atribuído ao subitem ${lastSubitemAfterDelay.id} (cno ou scpo)`);
-      })();
-    }
+        (async () => {
+          await new Promise(res => setTimeout(res, 5 * 1000));
+          
+          const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+          if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+            console.warn(`> Nenhum subitem encontrado após 20 segundos`);
+            return;
+          }
+          
+          let targetSubitem;
+          if (statusText.toLowerCase().includes('scpo')) {
+            // Para "scpo" usa o PENÚLTIMO subitem
+            if (subitemsAfterDelay.length >= 2) {
+              targetSubitem = subitemsAfterDelay[subitemsAfterDelay.length - 2];
+              console.log(`> Status "scpo" detectado. Atribuindo ao PENÚLTIMO subitem: "${targetSubitem.name}"`);
+            } else {
+              targetSubitem = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+              console.log(`> Status "scpo" detectado, mas há apenas um subitem. Atribuindo ao último: "${targetSubitem.name}"`);
+            }
+          } else {
+            // Para "cno" usa o ÚLTIMO subitem
+            targetSubitem = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+            console.log(`> Status "cno" detectado. Atribuindo ao ÚLTIMO subitem: "${targetSubitem.name}"`);
+          }
+          
+          const { boardId, cols } = await getSubitemBoardAndColumns(targetSubitem.id);
+          await assignUserToSubitem(targetSubitem.id, boardId, cols, 69279560);
+          console.log(`> Usuário 69279560 atribuído ao subitem ${targetSubitem.id} (${statusText.toLowerCase().includes('scpo') ? 'scpo' : 'cno'})`);
+        })();
+      }
 
         // Colocar Henrique nos Documentos
         else if (statusText.toLowerCase().includes('ab matricula') ||
