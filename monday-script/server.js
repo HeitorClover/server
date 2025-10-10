@@ -495,6 +495,7 @@ async function processEvent(body) {
         console.log(`> Usuário 90917412 atribuído ao subitem ${lastSubitemAfterDelay.id} (ab matricula)`);
       })();
     }
+
     // Colonar Bruna na Engenharia
     if (statusText.toLowerCase().includes('scpo') ||
         statusText.toLowerCase().includes('cno')) {
@@ -532,10 +533,23 @@ async function processEvent(body) {
         const { boardId, cols } = await getSubitemBoardAndColumns(targetSubitem.id);
         await assignUserToSubitem(targetSubitem.id, boardId, cols, 69279560);
         console.log(`> Usuário 69279560 atribuído ao subitem ${targetSubitem.id} (${statusText.toLowerCase().includes('scpo') ? 'scpo' : 'cno'})`);
+
+        // NOVA REGRA: Verificação específica para ENG - CNO
+        if (statusText.toLowerCase().includes('eng - cno') || statusText.toLowerCase().includes('cno')) {
+          console.log(`> Verificando existência do subitem "CONTRATO DE EMPREITADA" para ENG - CNO...`);
+          
+          const contratoEmpreitadaSubitem = await findSubitemByName(Number(itemId), 'CONTRATO DE EMPREITADA');
+          if (contratoEmpreitadaSubitem) {
+            console.log(`> Subitem "CONTRATO DE EMPREITADA" encontrado! Alterando status do item pai para ENGENHARIA...`);
+            await changeParentItemStatus(Number(itemId), 'ENGENHARIA');
+          } else {
+            console.log(`> Subitem "CONTRATO DE EMPREITADA" não encontrado.`);
+          }
+        }
       })();
     }
 
-        // Colocar Henrique nos Documentos
+    // Colocar Henrique nos Documentos
     else if (statusText.toLowerCase().includes('ab matricula') ||
           statusText.toLowerCase().includes('fazer escritura') ||
           statusText.toLowerCase().includes('doc - unificação') ||
