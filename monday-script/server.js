@@ -416,6 +416,24 @@ async function processEvent(body) {
       })();
     }
 
+    //Colocar Deboráh 
+    if (statusText.toLowerCase().includes('ab matricula')) {
+      console.log(`> Atribuição do usuário 90917412 agendada para daqui a 5 segundos`);
+      (async () => {
+        await new Promise(res => setTimeout(res, 5 * 1000));
+        
+        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+          console.warn(`> Nenhum subitem encontrado após 5 segundos`);
+          return;
+        }
+        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+        
+        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        await assignUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 90917412);
+        console.log(`> Usuário 90917412 atribuído ao subitem ${lastSubitemAfterDelay.id} (ab matricula)`);
+      })();
+    }
     // Colonar Bruna na Engenharia
     if (statusText.toLowerCase().includes('scpo') ||
         statusText.toLowerCase().includes('cno')) {
@@ -457,50 +475,50 @@ async function processEvent(body) {
     }
 
         // Colocar Henrique nos Documentos
-        else if (statusText.toLowerCase().includes('ab matricula') ||
-                statusText.toLowerCase().includes('fazer escritura') ||
-                statusText.toLowerCase().includes('doc - unificação') ||
-                statusText.toLowerCase().includes('doc - desmembramento') ||
-                statusText.toLowerCase().includes('atualizar matricula') ||
-                statusText.toLowerCase().includes('cartório/prefeitura') ||
-                statusText.toLowerCase().includes('habite-se') ||
-                statusText.toLowerCase().includes('enel') ||
-                statusText.toLowerCase().includes('averbação cartório') ||
-                statusText.toLowerCase().includes('emitir alvará')) {
-          
-          console.log(`> Status "${statusText}" detectado. Atribuição do usuário 69279625 agendada para daqui a 5 segundos`);
-          
-          (async () => {
-            await new Promise(res => setTimeout(res, 5 * 1000));
-            
-            // Revalida qual é o último subitem após 5 segundos
-            const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
-            if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
-              console.warn(`> Nenhum subitem encontrado após 5 segundos`);
-              return;
-            }
-            
-            let targetSubitem;
-            if (statusText.toLowerCase().includes('enel')) {
-              // Para "enel" usa o PENÚLTIMO subitem
-              if (subitemsAfterDelay.length >= 2) {
-                targetSubitem = subitemsAfterDelay[subitemsAfterDelay.length - 2];
-                console.log(`> Status "enel" detectado. Atribuindo ao PENÚLTIMO subitem: "${targetSubitem.name}"`);
-              } else {
-                targetSubitem = subitemsAfterDelay[subitemsAfterDelay.length - 1];
-                console.log(`> Status "enel" detectado, mas há apenas um subitem. Atribuindo ao último: "${targetSubitem.name}"`);
-              }
-            } else {
-              // Para outros status usa o ÚLTIMO subitem
-              targetSubitem = subitemsAfterDelay[subitemsAfterDelay.length - 1];
-              console.log(`> Atribuindo ao ÚLTIMO subitem: "${targetSubitem.name}"`);
-            }
-            
-            const { boardId: boardIdAfterDelay, cols: colsAfterDelay } = await getSubitemBoardAndColumns(targetSubitem.id);
-            await assignUserToSubitem(targetSubitem.id, boardIdAfterDelay, colsAfterDelay, 69279625);
-            console.log(`> Usuário 69279625 atribuído ao subitem ${targetSubitem.id} (${statusText})`);
-          })();
+    else if (statusText.toLowerCase().includes('ab matricula') ||
+          statusText.toLowerCase().includes('fazer escritura') ||
+          statusText.toLowerCase().includes('doc - unificação') ||
+          statusText.toLowerCase().includes('doc - desmembramento') ||
+          statusText.toLowerCase().includes('atualizar matricula') ||
+          statusText.toLowerCase().includes('cartório/prefeitura') ||
+          statusText.toLowerCase().includes('habite-se') ||
+          statusText.toLowerCase().includes('enel') ||
+          statusText.toLowerCase().includes('averbação cartório') ||
+          statusText.toLowerCase().includes('emitir alvará')) {
+      
+      console.log(`> Status "${statusText}" detectado. Atribuição do usuário 69279625 agendada para daqui a 5 segundos`);
+      
+      (async () => {
+        await new Promise(res => setTimeout(res, 5 * 1000));
+        
+        // Revalida qual é o último subitem após 5 segundos
+        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+          console.warn(`> Nenhum subitem encontrado após 5 segundos`);
+          return;
         }
+        
+        let targetSubitem;
+        if (statusText.toLowerCase().includes('ab matricula') || statusText.toLowerCase().includes('enel')) {
+          // Para "ab matricula" e "enel" usa o PENÚLTIMO subitem
+          if (subitemsAfterDelay.length >= 2) {
+            targetSubitem = subitemsAfterDelay[subitemsAfterDelay.length - 2];
+            console.log(`> Status "${statusText}" detectado. Atribuindo ao PENÚLTIMO subitem: "${targetSubitem.name}"`);
+          } else {
+            targetSubitem = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+            console.log(`> Status "${statusText}" detectado, mas há apenas um subitem. Atribuindo ao último: "${targetSubitem.name}"`);
+          }
+        } else {
+          // Para outros status usa o ÚLTIMO subitem
+          targetSubitem = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+          console.log(`> Atribuindo ao ÚLTIMO subitem: "${targetSubitem.name}"`);
+        }
+        
+        const { boardId: boardIdAfterDelay, cols: colsAfterDelay } = await getSubitemBoardAndColumns(targetSubitem.id);
+        await assignUserToSubitem(targetSubitem.id, boardIdAfterDelay, colsAfterDelay, 69279625);
+        console.log(`> Usuário 69279625 atribuído ao subitem ${targetSubitem.id} (${statusText})`);
+      })();
+    }
 
     // NOVA FUNCIONALIDADE MODIFICADA: Para unificação, criar projeto e desmembramento - copiar responsável de "ESCOLHA DE PROJETO"
     else if (statusText.toLowerCase().includes('exe. projeto') ||
