@@ -495,6 +495,25 @@ async function processEvent(body) {
         await assignUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 90917412);
         console.log(`> Usuário 90917412 atribuído ao subitem ${lastSubitemAfterDelay.id} (ab matricula)`);
       })();
+    }  
+
+    //Colocar Brenda 
+    if (statusText.toLowerCase().includes('engenharia')) {
+      console.log(`> Atribuição do usuário 69279574 agendada para daqui a 5 segundos`);
+      (async () => {
+        await new Promise(res => setTimeout(res, 5 * 1000));
+        
+        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+          console.warn(`> Nenhum subitem encontrado após 5 segundos`);
+          return;
+        }
+        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+        
+        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        await assignUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69279574);
+        console.log(`> Usuário 69279574 atribuído ao subitem ${lastSubitemAfterDelay.id} (engenharia)`);
+      })();
     }
 
     // Colonar Bruna na Engenharia
