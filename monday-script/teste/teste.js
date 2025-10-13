@@ -43,9 +43,44 @@ function formatCPF(cpf) {
   return formatted;
 }
 
-// Função para extrair o valor do CPF do objeto do Monday
-function extractCPFValue(value) {
-  console.log(`🔍 Extraindo valor do CPF:`, JSON.stringify(value));
+// Função para formatar telefone
+function formatPhone(phone) {
+  if (!phone) return phone;
+  
+  // Se for um objeto, extrai o valor
+  if (typeof phone === 'object' && phone.value) {
+    phone = phone.value;
+  }
+  
+  const numbersOnly = String(phone).replace(/\D/g, '');
+  
+  console.log(`📱 Formatando telefone: ${numbersOnly} (${numbersOnly.length} dígitos)`);
+  
+  // Verifica o tamanho do número
+  if (numbersOnly.length === 13) {
+    // Formato: 5588998685336 -> +55 (88) 99868-5336
+    const formatted = `+${numbersOnly.substring(0, 2)} (${numbersOnly.substring(2, 4)}) ${numbersOnly.substring(4, 9)}-${numbersOnly.substring(9)}`;
+    console.log(`✅ Telefone formatado: ${numbersOnly} -> ${formatted}`);
+    return formatted;
+  } else if (numbersOnly.length === 11) {
+    // Formato: 88998685336 -> (88) 99868-5336
+    const formatted = `(${numbersOnly.substring(0, 2)}) ${numbersOnly.substring(2, 7)}-${numbersOnly.substring(7)}`;
+    console.log(`✅ Telefone formatado: ${numbersOnly} -> ${formatted}`);
+    return formatted;
+  } else if (numbersOnly.length === 10) {
+    // Formato: 8899368533 -> (88) 9936-8533
+    const formatted = `(${numbersOnly.substring(0, 2)}) ${numbersOnly.substring(2, 6)}-${numbersOnly.substring(6)}`;
+    console.log(`✅ Telefone formatado: ${numbersOnly} -> ${formatted}`);
+    return formatted;
+  } else {
+    console.log(`⚠️ Telefone não tem formato reconhecido: ${numbersOnly} (${numbersOnly.length} dígitos)`);
+    return phone; // Retorna original se não tiver formato reconhecido
+  }
+}
+
+// Função para extrair o valor do objeto do Monday
+function extractValue(value) {
+  console.log(`🔍 Extraindo valor:`, JSON.stringify(value));
   
   if (typeof value === 'object' && value !== null) {
     // Tenta diferentes propriedades que o Monday pode usar
@@ -85,38 +120,37 @@ async function gql(query) {
   return data.data;
 }
 
-// Função para atualizar o CPF formatado - CORRIGIDA
-async function updateFormattedCPF(itemId, boardId, columnId, formattedCPF) {
+// Função para atualizar o valor formatado
+async function updateFormattedValue(itemId, boardId, columnId, formattedValue) {
   try {
-    console.log(`🔄 Atualizando CPF para: ${formattedCPF}`);
+    console.log(`🔄 Atualizando valor para: ${formattedValue}`);
     
     // Para colunas de texto, enviamos o valor diretamente como string
-    // Não precisamos do objeto {text: ...} para colunas de texto simples
     const mutation = `mutation {
       change_simple_column_value(
         board_id: ${boardId},
         item_id: ${itemId},
         column_id: "${columnId}",
-        value: "${formattedCPF.replace(/"/g, '\\"')}"
+        value: "${formattedValue.replace(/"/g, '\\"')}"
       ) { id }
     }`;
     
     console.log(`📤 Enviando mutation:`, mutation);
     
     const result = await gql(mutation);
-    console.log(`✅ CPF formatado atualizado com sucesso: ${formattedCPF}`);
+    console.log(`✅ Valor formatado atualizado com sucesso: ${formattedValue}`);
     return result;
   } catch (error) {
-    console.error('❌ Erro ao atualizar CPF:', error);
+    console.error('❌ Erro ao atualizar valor:', error);
     
     // Tentar método alternativo se o primeiro falhar
     console.log('🔄 Tentando método alternativo...');
-    return await updateFormattedCPFAlternative(itemId, boardId, columnId, formattedCPF);
+    return await updateFormattedValueAlternative(itemId, boardId, columnId, formattedValue);
   }
 }
 
 // Método alternativo para atualizar coluna de texto
-async function updateFormattedCPFAlternative(itemId, boardId, columnId, formattedCPF) {
+async function updateFormattedValueAlternative(itemId, boardId, columnId, formattedValue) {
   try {
     // Método alternativo usando change_column_value com valor direto
     const mutation = `mutation {
@@ -124,14 +158,14 @@ async function updateFormattedCPFAlternative(itemId, boardId, columnId, formatte
         board_id: ${boardId},
         item_id: ${itemId},
         column_id: "${columnId}",
-        value: "${formattedCPF.replace(/"/g, '\\"')}"
+        value: "${formattedValue.replace(/"/g, '\\"')}"
       ) { id }
     }`;
     
     console.log(`📤 Enviando mutation alternativa:`, mutation);
     
     const result = await gql(mutation);
-    console.log(`✅ CPF formatado atualizado com sucesso (método alternativo): ${formattedCPF}`);
+    console.log(`✅ Valor formatado atualizado com sucesso (método alternativo): ${formattedValue}`);
     return result;
   } catch (error) {
     console.error('❌ Erro no método alternativo:', error);
@@ -188,13 +222,14 @@ async function processWebhook(body) {
     console.log(`🔍 Tipo de evento: ${event.type}`);
     console.log(`🔍 Coluna alterada: "${event.columnTitle}"`);
 
-    // Verificar se é uma mudança na coluna CPF
+    // Verificar se é uma mudança em coluna que queremos formatar
     if (event.type === 'update_column_value') {
       console.log('📋 Evento de atualização de coluna detectado');
       
       const itemId = event.pulseId;
       const columnId = event.columnId;
       const rawValue = event.value;
+      const columnTitle = event.columnTitle;
       
       console.log(`📊 Item ID: ${itemId}, Column ID: ${columnId}`);
       console.log(`📊 Valor bruto:`, JSON.stringify(rawValue));
@@ -204,46 +239,71 @@ async function processWebhook(body) {
         return;
       }
       
-      // Verificar se a coluna alterada é a coluna CPF
-      if (event.columnTitle.toLowerCase() !== 'cpf') {
-        console.log(`⚠️  Mudança não foi na coluna CPF, mas sim em: "${event.columnTitle}"`);
+      // Extrair o valor real do objeto
+      const extractedValue = extractValue(rawValue);
+      console.log(`📝 Valor extraído: ${extractedValue}`);
+      
+      let formattedValue;
+      let shouldUpdate = false;
+      
+      // Verificar qual coluna foi alterada e aplicar formatação correspondente
+      if (columnTitle.toLowerCase() === 'cpf') {
+        console.log(`🎯 Coluna CPF detectada!`);
+        
+        // Formatando o CPF
+        formattedValue = formatCPF(extractedValue);
+        
+        // Verificar se o CPF já está formatado (para evitar loop)
+        if (formattedValue !== extractedValue) {
+          shouldUpdate = true;
+          console.log(`🔧 Formatando CPF: ${extractedValue} -> ${formattedValue}`);
+        } else {
+          console.log('ℹ️  CPF já está formatado, nenhuma ação necessária');
+        }
+        
+      } else if (columnTitle.toLowerCase().includes('número') || 
+                 columnTitle.toLowerCase().includes('numero') ||
+                 columnTitle.toLowerCase().includes('telefone') ||
+                 columnTitle.toLowerCase().includes('celular') ||
+                 columnTitle.toLowerCase().includes('phone')) {
+        
+        console.log(`🎯 Coluna de telefone detectada: "${columnTitle}"`);
+        
+        // Formatando o telefone
+        formattedValue = formatPhone(extractedValue);
+        
+        // Verificar se o telefone já está formatado (para evitar loop)
+        if (formattedValue !== extractedValue) {
+          shouldUpdate = true;
+          console.log(`🔧 Formatando telefone: ${extractedValue} -> ${formattedValue}`);
+        } else {
+          console.log('ℹ️  Telefone já está formatado, nenhuma ação necessária');
+        }
+      } else {
+        console.log(`⚠️  Coluna não suportada: "${columnTitle}"`);
         return;
       }
       
-      console.log(`🎯 Coluna CPF detectada!`);
-      
-      // Extrair o valor real do CPF do objeto
-      const cpfValue = extractCPFValue(rawValue);
-      console.log(`📝 Valor extraído do CPF: ${cpfValue}`);
-      
-      // Formatando o CPF
-      const formattedCPF = formatCPF(cpfValue);
-      
-      // Verificar se o CPF já está formatado (para evitar loop)
-      if (formattedCPF === cpfValue) {
-        console.log('ℹ️  CPF já está formatado, nenhuma ação necessária');
-        return;
+      // Se precisamos atualizar, prosseguir com a atualização
+      if (shouldUpdate) {
+        // Obter informações do item para pegar o boardId
+        const itemInfo = await getItemInfo(itemId);
+        
+        if (!itemInfo) {
+          console.log('❌ Não foi possível obter informações do item');
+          return;
+        }
+        
+        // Atualizar com o valor formatado
+        await updateFormattedValue(
+          itemId, 
+          itemInfo.board.id, 
+          columnId, 
+          formattedValue
+        );
+        
+        console.log('✅ Processamento do webhook concluído com sucesso!');
       }
-      
-      console.log(`🔧 Formatando CPF: ${cpfValue} -> ${formattedCPF}`);
-      
-      // Obter informações do item para pegar o boardId
-      const itemInfo = await getItemInfo(itemId);
-      
-      if (!itemInfo) {
-        console.log('❌ Não foi possível obter informações do item');
-        return;
-      }
-      
-      // Atualizar com o CPF formatado
-      await updateFormattedCPF(
-        itemId, 
-        itemInfo.board.id, 
-        columnId, 
-        formattedCPF
-      );
-      
-      console.log('✅ Processamento do webhook concluído com sucesso!');
       
     } else {
       console.log(`⚠️  Tipo de evento não suportado: ${event.type}`);
@@ -299,6 +359,14 @@ app.post('/test-cpf', (req, res) => {
   const { cpf } = req.body;
   const formatted = formatCPF(cpf);
   res.json({ original: cpf, formatted: formatted });
+});
+
+// Rota de debug para testar manualmente telefone
+app.post('/test-phone', (req, res) => {
+  console.log('📍 POST /test-phone recebido');
+  const { phone } = req.body;
+  const formatted = formatPhone(phone);
+  res.json({ original: phone, formatted: formatted });
 });
 
 const PORT = process.env.PORT || 1000;
