@@ -87,22 +87,20 @@ async function gql(query) {
 
 // Função para atualizar o CPF formatado - CORRIGIDA
 async function updateFormattedCPF(itemId, boardId, columnId, formattedCPF) {
-  // Para colunas de texto, precisamos enviar o valor como um objeto JSON stringificado
-  // O Monday espera: '{"text":"070.060.373-50"}' para colunas de texto
-  const valueObject = { text: formattedCPF };
-  const valueJson = JSON.stringify(valueObject);
-  
-  const mutation = `mutation {
-    change_column_value(
-      board_id: ${boardId},
-      item_id: ${itemId},
-      column_id: "${columnId}",
-      value: "{\\"text\\":\\"${formattedCPF}\\"}"
-    ) { id }
-  }`;
-  
   try {
     console.log(`🔄 Atualizando CPF para: ${formattedCPF}`);
+    
+    // Para colunas de texto, enviamos o valor diretamente como string
+    // Não precisamos do objeto {text: ...} para colunas de texto simples
+    const mutation = `mutation {
+      change_simple_column_value(
+        board_id: ${boardId},
+        item_id: ${itemId},
+        column_id: "${columnId}",
+        value: "${formattedCPF.replace(/"/g, '\\"')}"
+      ) { id }
+    }`;
+    
     console.log(`📤 Enviando mutation:`, mutation);
     
     const result = await gql(mutation);
@@ -110,6 +108,33 @@ async function updateFormattedCPF(itemId, boardId, columnId, formattedCPF) {
     return result;
   } catch (error) {
     console.error('❌ Erro ao atualizar CPF:', error);
+    
+    // Tentar método alternativo se o primeiro falhar
+    console.log('🔄 Tentando método alternativo...');
+    return await updateFormattedCPFAlternative(itemId, boardId, columnId, formattedCPF);
+  }
+}
+
+// Método alternativo para atualizar coluna de texto
+async function updateFormattedCPFAlternative(itemId, boardId, columnId, formattedCPF) {
+  try {
+    // Método alternativo usando change_column_value com valor direto
+    const mutation = `mutation {
+      change_column_value(
+        board_id: ${boardId},
+        item_id: ${itemId},
+        column_id: "${columnId}",
+        value: "${formattedCPF.replace(/"/g, '\\"')}"
+      ) { id }
+    }`;
+    
+    console.log(`📤 Enviando mutation alternativa:`, mutation);
+    
+    const result = await gql(mutation);
+    console.log(`✅ CPF formatado atualizado com sucesso (método alternativo): ${formattedCPF}`);
+    return result;
+  } catch (error) {
+    console.error('❌ Erro no método alternativo:', error);
     throw error;
   }
 }
