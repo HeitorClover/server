@@ -85,20 +85,26 @@ async function gql(query) {
   return data.data;
 }
 
-// Função para atualizar o CPF formatado
+// Função para atualizar o CPF formatado - CORRIGIDA
 async function updateFormattedCPF(itemId, boardId, columnId, formattedCPF) {
-  // Para colunas de texto, enviamos como string simples
+  // Para colunas de texto, precisamos enviar o valor como um objeto JSON stringificado
+  // O Monday espera: '{"text":"070.060.373-50"}' para colunas de texto
+  const valueObject = { text: formattedCPF };
+  const valueJson = JSON.stringify(valueObject);
+  
   const mutation = `mutation {
     change_column_value(
       board_id: ${boardId},
       item_id: ${itemId},
       column_id: "${columnId}",
-      value: "${formattedCPF}"
+      value: "{\\"text\\":\\"${formattedCPF}\\"}"
     ) { id }
   }`;
   
   try {
     console.log(`🔄 Atualizando CPF para: ${formattedCPF}`);
+    console.log(`📤 Enviando mutation:`, mutation);
+    
     const result = await gql(mutation);
     console.log(`✅ CPF formatado atualizado com sucesso: ${formattedCPF}`);
     return result;
