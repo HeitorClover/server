@@ -516,6 +516,27 @@ async function processEvent(body) {
       })();
     }
 
+    //Colocar Yasnnan
+    if (statusText.toLowerCase().includes('siopi')) {
+      console.log(`> Atribuição do usuário 69227324 agendada para daqui a 5 segundos`);
+      (async () => {
+        await new Promise(res => setTimeout(res, 5 * 1000));
+        
+        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+          console.warn(`> Nenhum subitem encontrado após 5 segundos`);
+          return;
+        }
+        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+        
+        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        await assignUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69227324);
+        console.log(`> Usuário 69227324 atribuído ao subitem ${lastSubitemAfterDelay.id} (siopi)`);
+      })();
+    }
+
+
+
     // Colonar Bruna na Engenharia
     if (statusText.toLowerCase().includes('scpo') ||
         statusText.toLowerCase().includes('cno')) {
