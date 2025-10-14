@@ -618,6 +618,7 @@ async function processEvent(body) {
           statusText.toLowerCase().includes('cartório/prefeitura') ||
           statusText.toLowerCase().includes('habite-se') ||
           statusText.toLowerCase().includes('enel') ||
+          statusText.toLowerCase().includes('registro em cartório') ||
           statusText.toLowerCase().includes('averbação cartório') ||
           statusText.toLowerCase().includes('emitir alvará')) {
       
