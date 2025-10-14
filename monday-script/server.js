@@ -19,17 +19,17 @@ const DATE_COL_TITLE = 'FINALIZAÇÃO';
 
 // Status aceitos
 const ACCEPT = [
-//  01 - Atendimento: 
+// 01 - Vendas CB 
+  'aprovados cb', 'visita', 'fechado cb', 'escolha de projeto', 'desistente', 
+
+// 02 - Atendimento: 
   'abrir conta', 'documentos', 'caixaaqui', 'assinatura', 'conformidade', 'conta ativa', 
   'comercial', 'doc pendente', 'restrição', 'avaliação', 'desist/demora',
 
-// 02 - Avaliação:
+// 03 - Avaliação:
   'aprovado', 'aprovados cb', 'condicionado', 'reprovado', 'analise', 'engenharia', 'projetos',  
 
-// Vendas CB 
-  'aprovados cb', 'visita', 'fechado cb', 'escolha de projeto', 'desistente', 
-
-// 03 - Projetos:
+// 04 - Projetos:
   'abrir o. s.', 'exe. projeto',  'unificação', 'desmembramento',
   'pci/memoriais','cont. empreitada', 'projeto completo', 'engenharia',
 
@@ -37,15 +37,15 @@ const ACCEPT = [
 
   'scpo', 'cno',
 
-// 04 - Engenharia:
+// 05 - Engenharia:
   'solicitada', 'eng. sem clientes', 'siopi', 
 
-// 05 - Siopi:
+// 06 - Siopi:
   'assinatura', 'enviar conformidade', 'conformidade', 'conforme',
 
   'atualizar matricula', 'matricula atualizada',
 
-// 06 - Assinatura de Contrato:
+// 07 - Assinatura de Contrato:
   'solicitar minuta', 'editar minuta', 'minuta editada', 'contrado assinado', 'registro em cartório',
   'garantia', 'garantia conforme', 'habite-se', 'averbação cartório',
 
@@ -517,7 +517,8 @@ async function processEvent(body) {
     }
 
     //Colocar Yasnnan
-    if (statusText.toLowerCase().includes('siopi')) {
+    if (statusText.toLowerCase().includes('siopi') ||
+        statusText.toLowerCase().includes('enviar conformidade')) {
       console.log(`> Atribuição do usuário 69227324 agendada para daqui a 5 segundos`);
       (async () => {
         await new Promise(res => setTimeout(res, 5 * 1000));
