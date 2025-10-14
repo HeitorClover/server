@@ -556,6 +556,25 @@ async function processEvent(body) {
       })();
     }
 
+    // Colocar Kailany
+    if (statusText.toLowerCase().includes('garantia')) {
+      console.log(`> Atribuição do usuário 74134693 agendada para daqui a 5 segundos`);
+      (async () => {
+        await new Promise(res => setTimeout(res, 5 * 1000));
+        
+        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+          console.warn(`> Nenhum subitem encontrado após 5 segundos`);
+          return;
+        }
+        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+        
+        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        await assignUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 74134693);
+        console.log(`> Usuário 74134693 atribuído ao subitem ${lastSubitemAfterDelay.id} (garantia)`);
+      })();
+    }
+
     // Colonar Bruna na Engenharia
     if (statusText.toLowerCase().includes('scpo') ||
         statusText.toLowerCase().includes('cno')) {
