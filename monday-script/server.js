@@ -499,7 +499,7 @@ async function processEvent(body) {
 
     //Colocar Brenda 
     if (statusText.toLowerCase().includes('engenharia') ||
-        statusText.toLowerCase().includes('gar. confrome aq')) {
+        statusText.toLowerCase().includes('gar. conforme aq')) {
       console.log(`> Atribuição do usuário 69279574 agendada para daqui a 5 segundos`);
       (async () => {
         await new Promise(res => setTimeout(res, 5 * 1000));
