@@ -229,8 +229,8 @@ async function setCompletedChecked(subitemId, boardId, columnId) {
   }
 }
 
-// Nova automação: atribui usuário específico
-async function assignUserToSubitem(subitemId, boardId, cols, userId) {
+// MODIFICADA: Nova automação: atribui ou remove usuário específico
+async function assignUserToSubitem(subitemId, boardId, cols, userId, remove = false) {
   try {
     const responsibleCol = findColumn(cols, 'RESPONSÁVEL', 'people') ||
                            findColumn(cols, 'Responsável', 'people') ||
@@ -240,7 +240,15 @@ async function assignUserToSubitem(subitemId, boardId, cols, userId) {
       return;
     }
 
-    const value = { personsAndTeams: [{ id: Number(userId), kind: "person" }] };
+    let value;
+    if (remove) {
+      // Para remover o responsável, envie um array vazio
+      value = { personsAndTeams: [] };
+    } else {
+      // Para atribuir um usuário
+      value = { personsAndTeams: [{ id: Number(userId), kind: "person" }] };
+    }
+    
     const valueStr = JSON.stringify(value).replace(/"/g, '\\"');
 
     const mutation = `mutation {
@@ -258,10 +266,15 @@ async function assignUserToSubitem(subitemId, boardId, cols, userId) {
       body: JSON.stringify({ query: mutation })
     });
     const json = await res.json();
-    console.log(`> assignUserToSubitem result for ${subitemId}:`, JSON.stringify(json, null, 2));
+    console.log(`> assignUserToSubitem result for ${subitemId} (${remove ? 'REMOVE' : 'ASSIGN'}):`, JSON.stringify(json, null, 2));
   } catch (err) {
-    console.error(`> Erro ao atribuir usuário no subitem ${subitemId}:`, err);
+    console.error(`> Erro ao ${remove ? 'remover' : 'atribuir'} usuário no subitem ${subitemId}:`, err);
   }
+}
+
+// NOVA FUNÇÃO: Remove usuário do subitem
+async function removeUserFromSubitem(subitemId, boardId, cols) {
+  return await assignUserToSubitem(subitemId, boardId, cols, null, true);
 }
 
 // Encontra subitem pelo nome
@@ -497,11 +510,38 @@ async function processEvent(body) {
       })();
     }  
 
-    //Colocar Brenda 
-    if (statusText.toLowerCase().includes('engenharia') ||
-        statusText.toLowerCase().includes('gar. conforme aq')) {
-      console.log(`> Atribuição do usuário 69279574 agendada para daqui a 5 segundos`);
+    // ATUALIZADA: Colocar Yorrany Lopes Martins e depois remover
+    if (statusText.toLowerCase().includes('aprovados cb') ||
+        statusText.toLowerCase().includes('projetos')) {
+      console.log(`> Atribuição do usuário 90917412 agendada para daqui a 5 segundos`);
       (async () => {
+        await new Promise(res => setTimeout(res, 5 * 1000));
+        
+        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+          console.warn(`> Nenhum subitem encontrado após 5 segundos`);
+          return;
+        }
+        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+        
+        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        
+        // Primeiro atribui o usuário
+        await assignUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 90917412);
+        console.log(`> Usuário 90917412 atribuído ao subitem ${lastSubitemAfterDelay.id} (aprovados cb/projetos)`);
+        
+        // Espera mais 5 segundos e remove
+        await new Promise(res => setTimeout(res, 5 * 1000));
+        await removeUserFromSubitem(lastSubitemAfterDelay.id, boardId, cols);
+        console.log(`> Usuário 90917412 removido do subitem ${lastSubitemAfterDelay.id} (aprovados cb/projetos)`);
+      })();
+    } 
+
+    //Colocar Brenda 
+    if (statusText.toLowerCase().includes('engenharia') || 
+        statusText.toLowerCase().includes('gar. conforme aq')) {
+        console.log(`> Atribuição do usuário 69279574 agendada para daqui a 5 segundos`);
+        (async () => {
         await new Promise(res => setTimeout(res, 5 * 1000));
         
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
@@ -520,8 +560,8 @@ async function processEvent(body) {
     //Colocar Yasnnan
     if (statusText.toLowerCase().includes('siopi') ||
         statusText.toLowerCase().includes('enviar conformidade')) {
-      console.log(`> Atribuição do usuário 69227324 agendada para daqui a 5 segundos`);
-      (async () => {
+        console.log(`> Atribuição do usuário 69227324 agendada para daqui a 5 segundos`);
+        (async () => {
         await new Promise(res => setTimeout(res, 5 * 1000));
         
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
