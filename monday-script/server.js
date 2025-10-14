@@ -38,7 +38,7 @@ const ACCEPT = [
   'scpo', 'cno',
 
 // 05 - Engenharia:
-  'solicitada', 'eng. sem clientes', 'siopi', 
+  'vistoria', 'eng. sem clientes', 'siopi', 
 
 // 06 - Siopi:
   'assinatura', 'enviar conformidade', 'conformidade', 'conforme',
