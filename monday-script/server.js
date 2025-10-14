@@ -19,21 +19,21 @@ const DATE_COL_TITLE = 'FINALIZAÇÃO';
 
 // Status aceitos
 const ACCEPT = [
-// 01 - Vendas CB 
-  'aprovados cb', 'visita', 'fechado cb', 'escolha de projeto', 'desistente', 
-
-// 02 - Atendimento: 
+// 01 - Atendimento: 
   'abrir conta', 'documentos', 'caixaaqui', 'assinatura', 'conformidade', 'conta ativa', 
   'comercial', 'doc pendente', 'restrição', 'avaliação', 'desist/demora',
 
-// 03 - Avaliação:
+// 02 - Avaliação:
   'aprovado', 'aprovados cb', 'condicionado', 'reprovado', 'analise', 'engenharia', 'projetos',  
+
+// 03 - Vendas CB 
+  'aprovados cb', 'visita', 'fechado cb', 'escolha de projeto', 'desistente', 
 
 // 04 - Projetos:
   'abrir o. s.', 'exe. projeto',  'unificação', 'desmembramento',
   'pci/memoriais','cont. empreitada', 'projeto completo', 'engenharia',
 
-  'ab matricula', 'cartório/prefeitura', 'fazer escritura', 'doc - unificação', 'doc - desmembramento', 'emitir alvará', 'enel',
+  'ab matricula', 'cartório/prefeitura', 'fazer escritura', 'doc - unificação', 'doc - desmembramento', 'emitir alvará', 'enel', 'habite-se imóvel',
 
   'scpo', 'cno',
 
@@ -47,7 +47,10 @@ const ACCEPT = [
 
 // 07 - Assinatura de Contrato:
   'solicitar minuta', 'editar minuta', 'minuta editada', 'contrado assinado', 'registro em cartório',
-  'garantia', 'gar. conforme', 'gar. conforme aq','habite-se', 'averbação cartório',
+  'garantia', 'gar. conforme', 'gar. conforme aq','habite-se', 'averbação cartório', 'liberação de terreno',
+
+// 08 - Medições:
+  '1ª medição', '2ª medição', '3ª medição', '4ª medição', '5ª medição', '6ª medição', 'concluido',
 
 // Outros:
   'concluido', 'reanálise', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 
@@ -72,7 +75,8 @@ const EXCLUDED_SUBITEM_NAMES = [
   'DESMEMBRAMENTO',
   'UNIFICAÇÃO',
   'CONTRATO DE EMPREITADA',
-  'CONTRATO DE COMPRA E VENDA'
+  'CONTRATO DE COMPRA E VENDA',
+  'HABITE-SE IMÓVEL'
 ];
 
 // Status que só atribuem usuário (não colocam data/check)
@@ -84,6 +88,7 @@ const STATUS_ONLY_ASSIGN = [
   'doc - desmembramento',
   'emitir alvará',
   'cartório/prefeitura',
+  'habite-se imóvel',
   'cno',
   'scpo'
 ];
@@ -539,6 +544,14 @@ async function processEvent(body) {
 
     //Colocar Brenda 
     if (statusText.toLowerCase().includes('engenharia') || 
+        statusText.toLowerCase().includes('liberação de terreno') || 
+        statusText.toLowerCase().includes('1ª medição') ||
+        statusText.toLowerCase().includes('2ª medição') ||
+        statusText.toLowerCase().includes('3ª medição') ||
+        statusText.toLowerCase().includes('4ª medição') ||
+        statusText.toLowerCase().includes('5ª medição') ||
+        statusText.toLowerCase().includes('6ª medição') ||
+        statusText.toLowerCase().includes('concluido') ||
         statusText.toLowerCase().includes('gar. conforme aq')) {
         console.log(`> Atribuição do usuário 69279574 agendada para daqui a 5 segundos`);
         (async () => {
@@ -674,6 +687,7 @@ async function processEvent(body) {
           statusText.toLowerCase().includes('doc - unificação') ||
           statusText.toLowerCase().includes('doc - desmembramento') ||
           statusText.toLowerCase().includes('atualizar matricula') ||
+          statusText.toLowerCase().includes('habite-se imóvel') ||
           statusText.toLowerCase().includes('cartório/prefeitura') ||
           statusText.toLowerCase().includes('habite-se') ||
           statusText.toLowerCase().includes('enel') ||
