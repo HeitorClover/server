@@ -52,6 +52,8 @@ const ACCEPT = [
 // 08 - Medições:
   '1ª medição', '2ª medição', '3ª medição', '4ª medição', '5ª medição', '6ª medição', 'concluido',
 
+  'habite-se aq',
+
 // Outros:
   'concluido', 'reanálise', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 
 ];
@@ -76,7 +78,8 @@ const EXCLUDED_SUBITEM_NAMES = [
   'UNIFICAÇÃO',
   'CONTRATO DE EMPREITADA',
   'CONTRATO DE COMPRA E VENDA',
-  'HABITE-SE IMÓVEL'
+  'HABITE-SE IMÓVEL',
+  'DOC - HABITE-SE AQUISIÇÃO'
 ];
 
 // Status que só atribuem usuário (não colocam data/check)
@@ -90,7 +93,8 @@ const STATUS_ONLY_ASSIGN = [
   'cartório/prefeitura',
   'habite-se imóvel',
   'cno',
-  'scpo'
+  'scpo',
+  'habite-se aq'
 ];
 
 console.log('--------------------------------------------');
@@ -693,6 +697,7 @@ async function processEvent(body) {
           statusText.toLowerCase().includes('enel') ||
           statusText.toLowerCase().includes('registro em cartório') ||
           statusText.toLowerCase().includes('averbação cartório') ||
+          statusText.toLowerCase().includes('habite-se aq') ||
           statusText.toLowerCase().includes('emitir alvará')) {
       
       console.log(`> Status "${statusText}" detectado. Atribuição do usuário 69279625 agendada para daqui a 5 segundos`);
