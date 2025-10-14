@@ -47,7 +47,7 @@ const ACCEPT = [
 
 // 07 - Assinatura de Contrato:
   'solicitar minuta', 'editar minuta', 'minuta editada', 'contrado assinado', 'registro em cartório',
-  'garantia', 'garantia conforme', 'habite-se', 'averbação cartório',
+  'garantia', 'gar. conforme', 'gar. conforme aq','habite-se', 'averbação cartório',
 
 // Outros:
   'concluido', 'reanálise', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 
@@ -498,7 +498,8 @@ async function processEvent(body) {
     }  
 
     //Colocar Brenda 
-    if (statusText.toLowerCase().includes('engenharia')) {
+    if (statusText.toLowerCase().includes('engenharia') ||
+        statusText.toLowerCase().includes('gar. confrome aq')) {
       console.log(`> Atribuição do usuário 69279574 agendada para daqui a 5 segundos`);
       (async () => {
         await new Promise(res => setTimeout(res, 5 * 1000));
