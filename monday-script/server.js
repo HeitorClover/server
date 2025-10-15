@@ -557,13 +557,13 @@ async function processEvent(body) {
         statusText.toLowerCase().includes('6ª medição') ||
         statusText.toLowerCase().includes('concluido') ||
         statusText.toLowerCase().includes('gar. conforme aq')) {
-        console.log(`> Atribuição do usuário 69279574 agendada para daqui a 5 segundos`);
+        console.log(`> Atribuição do usuário 69279574 agendada para daqui a 15 segundos`);
         (async () => {
-        await new Promise(res => setTimeout(res, 5 * 1000));
+        await new Promise(res => setTimeout(res, 15 * 1000));
         
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
         if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
-          console.warn(`> Nenhum subitem encontrado após 5 segundos`);
+          console.warn(`> Nenhum subitem encontrado após 15 segundos`);
           return;
         }
         const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
