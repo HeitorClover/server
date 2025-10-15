@@ -20,24 +20,59 @@ console.log(`BOOT_ID: ${BOOT_ID}`);
 console.log(`PID: ${process.pid}`);
 console.log('--------------------------------------------');
 
+// Função para extrair data e hora do formato do Monday
+function extractMondayDate(dateValue) {
+  console.log(`📅 Extraindo data do Monday:`, dateValue);
+  
+  if (!dateValue) {
+    return null;
+  }
+  
+  try {
+    // Se for string, tenta parsear como JSON
+    if (typeof dateValue === 'string') {
+      const dateObj = JSON.parse(dateValue);
+      if (dateObj && dateObj.date && dateObj.time) {
+        const dateTimeString = `${dateObj.date}T${dateObj.time}`;
+        console.log(`✅ Data extraída: ${dateTimeString}`);
+        return dateTimeString;
+      }
+    }
+    // Se já for objeto
+    else if (typeof dateValue === 'object' && dateValue.date && dateValue.time) {
+      const dateTimeString = `${dateValue.date}T${dateValue.time}`;
+      console.log(`✅ Data extraída: ${dateTimeString}`);
+      return dateTimeString;
+    }
+  } catch (error) {
+    console.log('❌ Erro ao extrair data do Monday:', error);
+  }
+  
+  return null;
+}
+
 // Função para calcular diferença entre datas e formatar
-function calculateAndFormatDateDifference(startDate, endDate) {
+function calculateAndFormatDateDifference(startDateValue, endDateValue) {
   console.log(`📅 Calculando diferença entre datas:`);
+  
+  const startDate = extractMondayDate(startDateValue);
+  const endDate = extractMondayDate(endDateValue);
+  
   console.log(`   Início: ${startDate}`);
   console.log(`   Fim: ${endDate}`);
   
   if (!startDate || !endDate) {
-    console.log('⚠️  Uma ou ambas as datas estão vazias');
+    console.log('⚠️  Uma ou ambas as datas estão vazias ou inválidas');
     return 'Datas incompletas';
   }
   
   try {
-    // Converter as datas do formato do monday para objetos Date
+    // Converter as datas para objetos Date
     const start = new Date(startDate);
     const end = new Date(endDate);
     
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      console.log('❌ Datas inválidas');
+      console.log('❌ Datas inválidas após conversão');
       return 'Datas inválidas';
     }
     
@@ -80,7 +115,7 @@ function extractValue(value) {
     } else if (value.text !== undefined) {
       return value.text;
     } else if (value.date !== undefined) {
-      return value.date;
+      return value;
     } else {
       return String(value);
     }
@@ -134,26 +169,7 @@ async function updateDurationColumn(itemId, boardId, columnId, durationText) {
     return result;
   } catch (error) {
     console.error('❌ Erro ao atualizar DURAÇÃO:', error);
-    
-    // Tentar método alternativo
-    try {
-      const alternativeMutation = `mutation {
-        change_column_value(
-          board_id: ${boardId},
-          item_id: ${itemId},
-          column_id: "${columnId}",
-          value: "{\\"text\\":\\"${durationText.replace(/"/g, '\\"')}\\"}"
-        ) { id }
-      }`;
-      
-      console.log(`📤 Tentando mutation alternativa`);
-      const result = await gql(alternativeMutation);
-      console.log(`✅ DURAÇÃO atualizada com sucesso (método alternativo): ${durationText}`);
-      return result;
-    } catch (altError) {
-      console.error('❌ Erro no método alternativo:', altError);
-      throw error;
-    }
+    throw error;
   }
 }
 
@@ -265,12 +281,12 @@ async function processWebhook(body) {
         return;
       }
       
-      // Extrair valores das datas
+      // Extrair valores das datas (agora mantemos o objeto completo para extractMondayDate)
       const inicioValue = extractValue(inicioColumn.value);
       const finalizacaoValue = extractValue(finalizacaoColumn.value);
       
-      console.log(`📅 Data INICIO: ${inicioValue}`);
-      console.log(`📅 Data FINALIZAÇÃO: ${finalizacaoValue}`);
+      console.log(`📅 Data INICIO bruta:`, inicioValue);
+      console.log(`📅 Data FINALIZAÇÃO bruta:`, finalizacaoValue);
       
       // Calcular diferença formatada
       const durationText = calculateAndFormatDateDifference(inicioValue, finalizacaoValue);
