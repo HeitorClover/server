@@ -52,7 +52,7 @@ const ACCEPT = [
 // 08 - Medições:
   '1ª medição', '2ª medição', '3ª medição', '4ª medição', '5ª medição', '6ª medição', 'concluido',
 
-  'habite-se aq',
+  'habite-se aq', 'liberada', 'solicitada',
 
 // Outros:
   'concluido', 'reanálise', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 
@@ -549,6 +549,8 @@ async function processEvent(body) {
     //Colocar Brenda 
     if (statusText.toLowerCase().includes('engenharia') || 
         statusText.toLowerCase().includes('liberação de terreno') || 
+        statusText.toLowerCase().includes('solicitada') ||
+        statusText.toLowerCase().includes('liberada') ||
         statusText.toLowerCase().includes('1ª medição') ||
         statusText.toLowerCase().includes('2ª medição') ||
         statusText.toLowerCase().includes('3ª medição') ||
