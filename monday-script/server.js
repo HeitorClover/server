@@ -47,12 +47,12 @@ const ACCEPT = [
 
 // 07 - Assinatura de Contrato:
   'solicitar minuta', 'editar minuta', 'minuta editada', 'contrado assinado', 'registro em cartório',
-  'garantia', 'gar. conforme', 'gar. conforme aq','habite-se', 'averbação cartório', 'liberação de terreno',
+  'garantia', 'gar. conforme', 'gar. conforme aq',
 
 // 08 - Medições:
   '1ª medição', '2ª medição', '3ª medição', '4ª medição', '5ª medição', '6ª medição', 'concluido',
 
-  'habite-se aq', 'liberada', 'solicitada',
+  'habite-se aq', 'liberada', 'averbação cartório',
 
 // Outros:
   'concluido', 'reanálise', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 
@@ -79,7 +79,8 @@ const EXCLUDED_SUBITEM_NAMES = [
   'CONTRATO DE EMPREITADA',
   'CONTRATO DE COMPRA E VENDA',
   'HABITE-SE IMÓVEL',
-  'DOC - HABITE-SE AQUISIÇÃO'
+  'DOC - HABITE-SE AQUISIÇÃO',
+  'DOC - AVERBAÇÃO CARTÓRIO'
 ];
 
 // Status que só atribuem usuário (não colocam data/check)
@@ -94,7 +95,8 @@ const STATUS_ONLY_ASSIGN = [
   'habite-se imóvel',
   'cno',
   'scpo',
-  'habite-se aq'
+  'habite-se aq',
+  'averbação cartório'
 ];
 
 console.log('--------------------------------------------');
@@ -547,18 +549,16 @@ async function processEvent(body) {
     } 
 
     //Colocar Brenda 
-    if (statusText.toLowerCase().includes('engenharia') || 
-        statusText.toLowerCase().includes('liberação de terreno') || 
-        statusText.toLowerCase().includes('solicitada') ||
+    if (statusText.toLowerCase().includes('engenharia') ||
+        statusText.toLowerCase().includes('gar. conforme aq') ||
         statusText.toLowerCase().includes('liberada') ||
         statusText.toLowerCase().includes('1ª medição') ||
         statusText.toLowerCase().includes('2ª medição') ||
         statusText.toLowerCase().includes('3ª medição') ||
         statusText.toLowerCase().includes('4ª medição') ||
         statusText.toLowerCase().includes('5ª medição') ||
-        statusText.toLowerCase().includes('6ª medição') ||
-        statusText.toLowerCase().includes('concluido') ||
-        statusText.toLowerCase().includes('gar. conforme aq')) {
+        statusText.toLowerCase().includes('liberação final') ||
+        statusText.toLowerCase().includes('concluido')) {
         console.log(`> Atribuição do usuário 69279574 agendada para daqui a 15 segundos`);
         (async () => {
         await new Promise(res => setTimeout(res, 15 * 1000));
