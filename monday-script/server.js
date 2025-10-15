@@ -182,24 +182,51 @@ function findColumn(cols, title, expectedType) {
   return cols.find(c => (c.title || '').toLowerCase().includes((title || '').toLowerCase())) || null;
 }
 
-// Seta data + hora atual na coluna de FINALIZAÇÃO
+// Seta data + hora atual na coluna de FINALIZAÇÃO (APENAS se estiver vazia)
 async function setTodayDate(subitemId, boardId, columnId) {
-  const now = new Date();
-  const date = now.toISOString().split('T')[0];
-  const pad = n => String(n).padStart(2, '0');
-  const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-  const valueJson = JSON.stringify({ date, time });
-
-  const mutation = `mutation {
-    change_column_value(
-      board_id: ${boardId},
-      item_id: ${subitemId},
-      column_id: "${columnId}",
-      value: "${valueJson.replace(/"/g, '\\"')}"
-    ) { id }
+  // Primeiro verifica se já existe data na coluna
+  const checkQuery = `query {
+    items(ids: ${subitemId}) {
+      column_values(ids: ["${columnId}"]) {
+        value
+        text
+      }
+    }
   }`;
-
+  
   try {
+    const checkRes = await fetch('https://api.monday.com/v2', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: API_KEY },
+      body: JSON.stringify({ query: checkQuery })
+    });
+    const checkJson = await checkRes.json();
+    
+    const columnValue = checkJson.data?.items?.[0]?.column_values?.[0]?.value;
+    const columnText = checkJson.data?.items?.[0]?.column_values?.[0]?.text;
+    
+    // Se já existe data (valor não vazio e texto não vazio), não faz nada
+    if (columnValue && columnValue !== '""' && columnText && columnText.trim() !== '') {
+      console.log(`> Subitem ${subitemId} já possui data (${columnText}). Não foi alterado.`);
+      return { skipped: true, existingDate: columnText };
+    }
+    
+    // Se chegou aqui, a coluna está vazia - prossegue com a atualização
+    const now = new Date();
+    const date = now.toISOString().split('T')[0];
+    const pad = n => String(n).padStart(2, '0');
+    const time = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+    const valueJson = JSON.stringify({ date, time });
+
+    const mutation = `mutation {
+      change_column_value(
+        board_id: ${boardId},
+        item_id: ${subitemId},
+        column_id: "${columnId}",
+        value: "${valueJson.replace(/"/g, '\\"')}"
+      ) { id }
+    }`;
+
     const res = await fetch('https://api.monday.com/v2', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: API_KEY },
@@ -351,7 +378,7 @@ async function getResponsibleFromSubitem(subitemId) {
   }
 }
 
-// Aplica ações padrão em um subitem (data + check)
+// Aplica ações padrão em um subitem (data + check) - MODIFICADA para só marcar check se data foi atualizada
 async function applyStandardActions(subitemId, boardId, cols, statusText) {
   const dateCol = findColumn(cols, DATE_COL_TITLE, 'date');
   if (!dateCol) {
@@ -359,20 +386,26 @@ async function applyStandardActions(subitemId, boardId, cols, statusText) {
     return;
   }
   
-  await setTodayDate(subitemId, boardId, dateCol.id);
-  console.log(`> Data atualizada para o subitem ${subitemId}`);
+  const dateResult = await setTodayDate(subitemId, boardId, dateCol.id);
+  
+  // Só marca como CONCLUIDO se a data foi atualizada (ou seja, estava vazia)
+  if (!dateResult || !dateResult.skipped) {
+    console.log(`> Data atualizada para o subitem ${subitemId}`);
 
-  // Marcar CONCLUIDO como checked (exceto para status excluídos)
-  if (!EXCLUDE_FROM_COMPLETED.map(s => s.toLowerCase()).includes(statusText.toLowerCase())) {
-    const completedCol = findColumn(cols, 'CONCLUIDO', 'checkbox');
-    if (completedCol) {
-      await setCompletedChecked(subitemId, boardId, completedCol.id);
-      console.log(`> Coluna CONCLUIDO marcada como checked para subitem ${subitemId}`);
+    // Marcar CONCLUIDO como checked (exceto para status excluídos)
+    if (!EXCLUDE_FROM_COMPLETED.map(s => s.toLowerCase()).includes(statusText.toLowerCase())) {
+      const completedCol = findColumn(cols, 'CONCLUIDO', 'checkbox');
+      if (completedCol) {
+        await setCompletedChecked(subitemId, boardId, completedCol.id);
+        console.log(`> Coluna CONCLUIDO marcada como checked para subitem ${subitemId}`);
+      } else {
+        console.warn(`> Coluna "CONCLUIDO" não encontrada no subitem ${subitemId}`);
+      }
     } else {
-      console.warn(`> Coluna "CONCLUIDO" não encontrada no subitem ${subitemId}`);
+      console.log(`> Status "${statusText}" excluído da marcação CONCLUIDO`);
     }
   } else {
-    console.log(`> Status "${statusText}" excluído da marcação CONCLUIDO`);
+    console.log(`> Subitem ${subitemId} já tinha data. Nenhuma ação de data/check realizada.`);
   }
 }
 
