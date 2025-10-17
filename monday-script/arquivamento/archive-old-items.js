@@ -151,36 +151,58 @@ async function updateDurationColumn(itemId, boardId, columnId, durationText) {
   }
 }
 
-// Função para buscar todos os subitens de UM board
+// Função para buscar todos os subitens de UM board - CORRIGIDA
 async function getSubitemsFromBoard(boardId) {
   const query = `query {
     boards(ids: ${boardId}) {
-      items {
-        id
-        name
-        board { id }
-        column_values {
-          column { id title }
-          text
-          value
+      items_page (query: {limit: 500}) {
+        items {
+          id
+          name
+          board {
+            id
+          }
+          column_values {
+            column {
+              id
+              title
+            }
+            text
+            value
+          }
+          parent_item {
+            id
+            name
+          }
         }
-        parent_item { id name }
       }
     }
   }`;
   
-  const data = await gql(query);
-  
-  if (!data.boards || data.boards.length === 0) {
-    console.error(`❌ Board ${boardId} não encontrado`);
+  try {
+    const data = await gql(query);
+    
+    if (!data.boards || data.boards.length === 0) {
+      console.error(`❌ Board ${boardId} não encontrado`);
+      return [];
+    }
+    
+    const board = data.boards[0];
+    if (!board.items_page || !board.items_page.items) {
+      console.log(`📋 Board ${boardId}: 0 subitens encontrados`);
+      return [];
+    }
+    
+    const items = board.items_page.items;
+    const subitems = items.filter(item => item.parent_item !== null);
+    
+    console.log(`📋 Board ${boardId}: ${subitems.length} subitens encontrados`);
+    return subitems;
+    
+  } catch (error) {
+    console.error(`❌ Erro ao buscar do board ${boardId}:`, error.message);
     return [];
   }
-  
-  const items = data.boards[0].items;
-  const subitems = items.filter(item => item.parent_item !== null);
-  
-  console.log(`📋 Board ${boardId}: ${subitems.length} subitens encontrados`);
-  return subitems;
 }
 
 // Função para buscar subitens de TODOS os boards
