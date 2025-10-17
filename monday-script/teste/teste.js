@@ -43,7 +43,7 @@ async function gql(query) {
   return data.data;
 }
 
-// Função para verificar arquivos na coluna DOCUMENTOS
+// Função para verificar arquivos na coluna DOCUMENTOS (CORRIGIDA)
 async function checkDocumentos(itemId) {
   try {
     console.log(`📁 Verificando arquivos na coluna DOCUMENTOS do item ${itemId}`);
@@ -60,10 +60,21 @@ async function checkDocumentos(itemId) {
           value
           ... on FileValue {
             files {
-              id
-              name
-              url
-              created_at
+              ... on FileAssetValue {
+                id
+                name
+                url
+              }
+              ... on FileDocValue {
+                id
+                name
+                url
+              }
+              ... on FileLinkValue {
+                id
+                name
+                url
+              }
             }
           }
         }
@@ -95,41 +106,45 @@ async function checkDocumentos(itemId) {
     
     console.log('✅ Coluna DOCUMENTOS encontrada');
     
-    // Extrair informações dos arquivos
+    // Extrair informações dos arquivos - método correto
     let files = [];
+    
+    // Método 1: Tentar extrair dos fragments GraphQL
     if (documentosColumn.files && Array.isArray(documentosColumn.files)) {
       files = documentosColumn.files;
-      console.log(`📊 Encontrados ${files.length} arquivo(s) na coluna DOCUMENTOS`);
-    } else {
-      console.log('ℹ️  Nenhum arquivo encontrado na coluna DOCUMENTOS');
-      
-      // Tentar extrair do campo value se files estiver vazio
-      if (documentosColumn.value) {
-        try {
-          const valueObj = JSON.parse(documentosColumn.value);
-          if (valueObj.files && Array.isArray(valueObj.files)) {
-            files = valueObj.files;
-            console.log(`📊 Encontrados ${files.length} arquivo(s) via campo value`);
-          }
-        } catch (e) {
-          console.log('ℹ️  Não foi possível extrair arquivos do campo value');
+      console.log(`📊 Encontrados ${files.length} arquivo(s) via fragment GraphQL`);
+    } 
+    // Método 2: Tentar extrair do campo value (fallback)
+    else if (documentosColumn.value) {
+      try {
+        const valueObj = JSON.parse(documentosColumn.value);
+        if (valueObj.files && Array.isArray(valueObj.files)) {
+          files = valueObj.files;
+          console.log(`📊 Encontrados ${files.length} arquivo(s) via campo value`);
+        } else if (valueObj && Array.isArray(valueObj)) {
+          files = valueObj;
+          console.log(`📊 Encontrados ${files.length} arquivo(s) via array value`);
         }
+      } catch (e) {
+        console.log('ℹ️  Não foi possível extrair arquivos do campo value');
       }
     }
+    
+    // Garantir que temos informações básicas dos arquivos
+    const processedFiles = files.map(file => ({
+      id: file.id || 'unknown',
+      name: file.name || 'arquivo_sem_nome',
+      url: file.url || ''
+    }));
     
     // Formatar resposta
     const result = {
       itemName: item.name,
       hasDocumentosColumn: true,
-      totalFiles: files.length,
-      files: files.map(file => ({
-        id: file.id,
-        name: file.name,
-        url: file.url,
-        created_at: file.created_at
-      })),
-      fileNames: files.map(file => file.name),
-      hasArtPdf: files.some(file => file.name && file.name.toLowerCase().includes('art.pdf'))
+      totalFiles: processedFiles.length,
+      files: processedFiles,
+      fileNames: processedFiles.map(file => file.name),
+      hasArtPdf: processedFiles.some(file => file.name && file.name.toLowerCase().includes('art.pdf'))
     };
     
     console.log(`📋 Arquivos encontrados: ${result.fileNames.join(', ')}`);
@@ -215,13 +230,13 @@ async function markConcluido(subitemId, boardId, columnId) {
   try {
     console.log(`✅ Marcando coluna CONCLUIDO como verdadeira no subitem ${subitemId}`);
     
-    // Para colunas do tipo "checkbox" ou "signal", usamos valor booleano
+    // Para colunas do tipo "checkbox" usamos o formato JSON correto
     const mutation = `mutation {
       change_column_value(
         board_id: ${boardId},
         item_id: ${subitemId},
         column_id: "${columnId}",
-        value: "{\\"checked\\":\\"true\\"}"
+        value: "{\\"checked\\":true}"
       ) { id }
     }`;
     
@@ -243,13 +258,13 @@ async function markConcluido(subitemId, boardId, columnId) {
 // Método alternativo para marcar como concluído
 async function markConcluidoAlternative(subitemId, boardId, columnId) {
   try {
-    // Método alternativo usando change_simple_column_value
+    // Método alternativo para diferentes tipos de coluna
     const mutation = `mutation {
       change_simple_column_value(
         board_id: ${boardId},
         item_id: ${subitemId},
         column_id: "${columnId}",
-        value: "true"
+        value: "{\\"checked\\":\\"true\\"}"
       ) { id }
     }`;
     
@@ -261,7 +276,26 @@ async function markConcluidoAlternative(subitemId, boardId, columnId) {
     
   } catch (error) {
     console.error('❌ Erro no método alternativo:', error);
-    throw error;
+    
+    // Última tentativa com valor simples
+    try {
+      const simpleMutation = `mutation {
+        change_simple_column_value(
+          board_id: ${boardId},
+          item_id: ${subitemId},
+          column_id: "${columnId}",
+          value: "true"
+        ) { id }
+      }`;
+      
+      console.log(`📤 Tentando método simples...`);
+      const result = await gql(simpleMutation);
+      console.log(`✅ Coluna CONCLUIDO marcada com sucesso (método simples)!`);
+      return result;
+    } catch (finalError) {
+      console.error('❌ Todos os métodos falharam:', finalError);
+      throw finalError;
+    }
   }
 }
 
