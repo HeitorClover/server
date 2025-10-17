@@ -43,12 +43,11 @@ async function gql(query) {
   return data.data;
 }
 
-// Função para verificar arquivos na coluna DOCUMENTOS (QUERY CORRIGIDA)
-async function checkDocumentos(itemId) {
+// Função para verificar arquivos na coluna PROJETOS
+async function checkProjetos(itemId) {
   try {
-    console.log(`📁 Verificando arquivos na coluna DOCUMENTOS do item ${itemId}`);
+    console.log(`📁 Verificando arquivos na coluna PROJETOS do item ${itemId}`);
     
-    // QUERY CORRIGIDA - usando a estrutura atual do Monday
     const query = `query {
       items(ids: ${itemId}) {
         id
@@ -73,30 +72,30 @@ async function checkDocumentos(itemId) {
     
     const item = data.items[0];
     
-    // Encontrar a coluna DOCUMENTOS
-    const documentosColumn = item.column_values.find(col => 
-      col.column && col.column.title === 'DOCUMENTOS'
+    // Encontrar a coluna PROJETOS
+    const projetosColumn = item.column_values.find(col => 
+      col.column && col.column.title === 'PROJETOS'
     );
     
-    if (!documentosColumn) {
-      console.log('❌ Coluna DOCUMENTOS não encontrada');
+    if (!projetosColumn) {
+      console.log('❌ Coluna PROJETOS não encontrada');
       return {
         itemName: item.name,
-        hasDocumentosColumn: false,
+        hasProjetosColumn: false,
         files: []
       };
     }
     
-    console.log('✅ Coluna DOCUMENTOS encontrada');
-    console.log(`📊 Valor da coluna: ${documentosColumn.value}`);
-    console.log(`📊 Texto da coluna: ${documentosColumn.text}`);
+    console.log('✅ Coluna PROJETOS encontrada');
+    console.log(`📊 Valor da coluna: ${projetosColumn.value}`);
+    console.log(`📊 Texto da coluna: ${projetosColumn.text}`);
     
-    // Extrair informações dos arquivos do campo value (método mais confiável)
+    // Extrair informações dos arquivos do campo value
     let files = [];
     
-    if (documentosColumn.value) {
+    if (projetosColumn.value) {
       try {
-        const valueObj = JSON.parse(documentosColumn.value);
+        const valueObj = JSON.parse(projetosColumn.value);
         
         if (valueObj.files && Array.isArray(valueObj.files)) {
           files = valueObj.files;
@@ -113,52 +112,62 @@ async function checkDocumentos(itemId) {
       }
     }
     
-    // Se não encontrou arquivos pelo value, tentar extrair do text
-    if (files.length === 0 && documentosColumn.text) {
-      console.log('🔄 Tentando extrair informações do campo text...');
-      
-      // O campo text geralmente contém os nomes dos arquivos separados por vírgula
-      const fileNames = documentosColumn.text.split(',').map(name => name.trim()).filter(name => name);
-      
-      if (fileNames.length > 0) {
-        files = fileNames.map((name, index) => ({
-          id: `file-${index}`,
-          name: name,
-          url: ''
-        }));
-        console.log(`📊 Encontrados ${files.length} arquivo(s) via campo text`);
-      }
-    }
-    
     // Garantir que temos informações básicas dos arquivos
     const processedFiles = files.map(file => ({
-      id: file.id || file.asset_id || file.fileId || `file-${Date.now()}-${Math.random()}`,
+      id: file.id || file.assetId || file.asset_id || `file-${Date.now()}-${Math.random()}`,
       name: file.name || file.file_name || file.filename || 'arquivo_sem_nome',
-      url: file.url || file.file_url || ''
+      url: file.url || ''
     }));
+    
+    // Verificar condições específicas dos arquivos
+    const hasArqPdf = processedFiles.some(file => 
+      file.name && 
+      file.name.toLowerCase().startsWith('arq') && 
+      file.name.toLowerCase().endsWith('.pdf')
+    );
+    
+    const hasHidroPdf = processedFiles.some(file => 
+      file.name && 
+      file.name.toLowerCase().startsWith('hidro') && 
+      file.name.toLowerCase().endsWith('.pdf')
+    );
+    
+    const hasMemoriaisPdf = processedFiles.some(file => 
+      file.name && 
+      file.name.toLowerCase().startsWith('memoriais') && 
+      file.name.toLowerCase().endsWith('.pdf')
+    );
     
     // Formatar resposta
     const result = {
       itemName: item.name,
-      hasDocumentosColumn: true,
+      hasProjetosColumn: true,
       totalFiles: processedFiles.length,
       files: processedFiles,
       fileNames: processedFiles.map(file => file.name),
-      hasArtPdf: processedFiles.some(file => file.name && file.name.toLowerCase().includes('art.pdf'))
+      hasArqPdf: hasArqPdf,
+      hasHidroPdf: hasHidroPdf,
+      hasMemoriaisPdf: hasMemoriaisPdf,
+      allConditionsMet: hasArqPdf && hasHidroPdf && hasMemoriaisPdf && processedFiles.length === 3
     };
     
     console.log(`📋 Arquivos encontrados: ${result.fileNames.join(', ')}`);
-    console.log(`🎨 Tem ART.pdf: ${result.hasArtPdf}`);
+    console.log(`📊 Condições:`);
+    console.log(`   - ARQ*.pdf: ${hasArqPdf}`);
+    console.log(`   - HIDRO*.pdf: ${hasHidroPdf}`);
+    console.log(`   - MEMORIAIS*.pdf: ${hasMemoriaisPdf}`);
+    console.log(`   - Total de 3 arquivos: ${processedFiles.length === 3}`);
+    console.log(`   - TODAS CONDIÇÕES ATENDIDAS: ${result.allConditionsMet}`);
     
     return result;
     
   } catch (error) {
-    console.error('❌ Erro ao verificar documentos:', error);
+    console.error('❌ Erro ao verificar projetos:', error);
     throw error;
   }
 }
 
-// Função para buscar subitens pelo nome
+// Função para buscar subitens pelo nome (com busca flexível)
 async function findSubitemByName(parentItemId, subitemName) {
   try {
     console.log(`🔍 Buscando subitem "${subitemName}" no item ${parentItemId}`);
@@ -194,28 +203,40 @@ async function findSubitemByName(parentItemId, subitemName) {
     }
     
     const subitems = data.items[0].subitems;
-    console.log(`📋 Encontrados ${subitems.length} subitens`);
+    console.log(`📋 Encontrados ${subitems.length} subitens: ${subitems.map(s => s.name).join(', ')}`);
     
-    // Procurar pelo subitem com nome exato "ABRIR O. S."
-    const targetSubitem = subitems.find(subitem => 
-      subitem.name && subitem.name.trim() === 'ABRIR O. S.'
-    );
+    // Busca flexível - remove espaços extras e compara
+    const targetSubitem = subitems.find(subitem => {
+      if (!subitem.name) return false;
+      
+      // Normaliza os nomes removendo espaços extras para comparação
+      const normalizedSubitemName = subitem.name.replace(/\s+/g, ' ').trim();
+      const normalizedTargetName = subitemName.replace(/\s+/g, ' ').trim();
+      
+      return normalizedSubitemName === normalizedTargetName;
+    });
     
     if (targetSubitem) {
-      console.log(`✅ Subitem "${subitemName}" encontrado: ID ${targetSubitem.id}`);
+      console.log(`✅ Subitem "${subitemName}" encontrado: ID ${targetSubitem.id} (nome original: "${targetSubitem.name}")`);
       
       // Encontrar a coluna "CONCLUIDO"
       const concluidoColumn = targetSubitem.column_values.find(col => 
         col.column && col.column.title === 'CONCLUIDO'
       );
       
+      if (concluidoColumn) {
+        console.log(`✅ Coluna CONCLUIDO encontrada: ID ${concluidoColumn.column.id}`);
+      } else {
+        console.log('❌ Coluna CONCLUIDO não encontrada no subitem');
+        console.log(`📋 Colunas disponíveis: ${targetSubitem.column_values.map(c => c.column.title).join(', ')}`);
+      }
+      
       return {
         subitem: targetSubitem,
         concluidoColumn: concluidoColumn
       };
     } else {
-      console.log(`❌ Subitem "${subitemName}" não encontrado`);
-      console.log(`📋 Subitens disponíveis: ${subitems.map(s => s.name).join(', ')}`);
+      console.log(`❌ Subitem "${subitemName}" não encontrado após normalização`);
       return null;
     }
     
@@ -299,9 +320,9 @@ async function markConcluidoAlternative(subitemId, boardId, columnId) {
   }
 }
 
-// Processar webhook do Monday para DOCUMENTOS
-async function processDocumentosWebhook(body) {
-  console.log('📦 Webhook DOCUMENTOS recebido - Iniciando processamento...');
+// Processar webhook do Monday para PROJETOS
+async function processProjetosWebhook(body) {
+  console.log('📦 Webhook PROJETOS recebido - Iniciando processamento...');
   
   try {
     const event = body.event;
@@ -314,29 +335,31 @@ async function processDocumentosWebhook(body) {
     
     console.log(`🔍 Processando item: ${itemId}`);
     
-    // 1. Verificar os arquivos na coluna DOCUMENTOS
-    const documentosInfo = await checkDocumentos(itemId);
+    // 1. Verificar os arquivos na coluna PROJETOS
+    const projetosInfo = await checkProjetos(itemId);
     
-    if (!documentosInfo || !documentosInfo.hasDocumentosColumn) {
-      console.log('❌ Informações de documentos não disponíveis');
+    if (!projetosInfo || !projetosInfo.hasProjetosColumn) {
+      console.log('❌ Informações de projetos não disponíveis');
       return;
     }
     
-    console.log(`📊 RESUMO DOCUMENTOS:`);
-    console.log(`   Item: ${documentosInfo.itemName}`);
-    console.log(`   Total de arquivos: ${documentosInfo.totalFiles}`);
-    console.log(`   Tem ART.pdf: ${documentosInfo.hasArtPdf}`);
+    console.log(`📊 RESUMO PROJETOS:`);
+    console.log(`   Item: ${projetosInfo.itemName}`);
+    console.log(`   Total de arquivos: ${projetosInfo.totalFiles}`);
+    console.log(`   Tem ARQ*.pdf: ${projetosInfo.hasArqPdf}`);
+    console.log(`   Tem HIDRO*.pdf: ${projetosInfo.hasHidroPdf}`);
+    console.log(`   Tem MEMORIAIS*.pdf: ${projetosInfo.hasMemoriaisPdf}`);
     
-    if (documentosInfo.totalFiles > 0) {
-      console.log(`   Arquivos: ${documentosInfo.fileNames.join(', ')}`);
+    if (projetosInfo.totalFiles > 0) {
+      console.log(`   Arquivos: ${projetosInfo.fileNames.join(', ')}`);
     }
     
-    // 2. Verificar condições: 2 arquivos E um deles é ART.pdf
-    if (documentosInfo.totalFiles === 2 && documentosInfo.hasArtPdf) {
-      console.log('🎯 CONDIÇÃO ATENDIDA: 2 documentos e um deles é ART.pdf');
+    // 2. Verificar condições: 3 arquivos específicos
+    if (projetosInfo.allConditionsMet) {
+      console.log('🎯 CONDIÇÃO ATENDIDA: 3 documentos específicos encontrados (ARQ, HIDRO, MEMORIAIS)');
       
-      // 3. Procurar o subitem "ABRIR O. S."
-      const subitemInfo = await findSubitemByName(itemId, 'ABRIR O. S.');
+      // 3. Procurar o subitem "EXE. PROJETO" (com busca flexível)
+      const subitemInfo = await findSubitemByName(itemId, 'EXE. PROJETO');
       
       if (subitemInfo && subitemInfo.subitem && subitemInfo.concluidoColumn) {
         console.log('✅ Subitem e coluna CONCLUIDO encontrados');
@@ -348,10 +371,10 @@ async function processDocumentosWebhook(body) {
           subitemInfo.concluidoColumn.column.id
         );
         
-        console.log('🎉 PROCESSO CONCLUÍDO: Subitem ABRIR O. S. marcado como CONCLUIDO!');
+        console.log('🎉 PROCESSO CONCLUÍDO: Subitem EXE. PROJETO marcado como CONCLUIDO!');
         
       } else {
-        console.log('❌ Subitem ABRIR O. S. ou coluna CONCLUIDO não encontrados');
+        console.log('❌ Subitem EXE. PROJETO ou coluna CONCLUIDO não encontrados');
         if (subitemInfo && subitemInfo.subitem && !subitemInfo.concluidoColumn) {
           console.log('⚠️  Subitem encontrado mas coluna CONCLUIDO não existe');
         }
@@ -359,14 +382,16 @@ async function processDocumentosWebhook(body) {
       
     } else {
       console.log('ℹ️  Condição não atendida:');
-      console.log(`   - Esperado: 2 arquivos | Encontrado: ${documentosInfo.totalFiles}`);
-      console.log(`   - Esperado: ART.pdf presente | Encontrado: ${documentosInfo.hasArtPdf}`);
+      console.log(`   - Esperado: 3 arquivos | Encontrado: ${projetosInfo.totalFiles}`);
+      console.log(`   - Esperado: ARQ*.pdf | Encontrado: ${projetosInfo.hasArqPdf}`);
+      console.log(`   - Esperado: HIDRO*.pdf | Encontrado: ${projetosInfo.hasHidroPdf}`);
+      console.log(`   - Esperado: MEMORIAIS*.pdf | Encontrado: ${projetosInfo.hasMemoriaisPdf}`);
     }
     
-    console.log('✅ Processamento do webhook DOCUMENTOS concluído!');
+    console.log('✅ Processamento do webhook PROJETOS concluído!');
     
   } catch (error) {
-    console.error('❌ Erro ao processar webhook DOCUMENTOS:', error);
+    console.error('❌ Erro ao processar webhook PROJETOS:', error);
     console.error('Stack trace:', error.stack);
   }
 }
@@ -386,21 +411,21 @@ app.post('/webhook', (req, res) => {
   console.log('✅ Respondendo 200 OK para Monday');
   res.status(200).json({ ok: true, boot: BOOT_ID, received: true });
   
-  // Processar o webhook em segundo plano apenas se for da coluna DOCUMENTOS
-  if (body.event && body.event.columnTitle === 'DOCUMENTOS') {
-    console.log('🔄 Iniciando processamento DOCUMENTOS em background...');
-    processDocumentosWebhook(body).catch(error => {
+  // Processar o webhook em segundo plano apenas se for da coluna PROJETOS
+  if (body.event && body.event.columnTitle === 'PROJETOS') {
+    console.log('🔄 Iniciando processamento PROJETOS em background...');
+    processProjetosWebhook(body).catch(error => {
       console.error('💥 Erro não tratado no processamento do webhook:', error);
     });
   } else {
-    console.log('ℹ️  Webhook não é da coluna DOCUMENTOS, ignorando...');
+    console.log('ℹ️  Webhook não é da coluna PROJETOS, ignorando...');
   }
 });
 
 // Rota para teste manual
-app.post('/test-documentos', async (req, res) => {
+app.post('/test-projetos', async (req, res) => {
   try {
-    console.log('📍 POST /test-documentos recebido');
+    console.log('📍 POST /test-projetos recebido');
     const { itemId } = req.body;
     
     if (!itemId) {
@@ -413,20 +438,20 @@ app.post('/test-documentos', async (req, res) => {
       steps: []
     };
     
-    // 1. Verificar documentos
-    const documentosInfo = await checkDocumentos(itemId);
-    result.documentosInfo = documentosInfo;
-    result.steps.push('Verificação de documentos concluída');
+    // 1. Verificar projetos
+    const projetosInfo = await checkProjetos(itemId);
+    result.projetosInfo = projetosInfo;
+    result.steps.push('Verificação de projetos concluída');
     
-    if (documentosInfo && documentosInfo.hasDocumentosColumn) {
+    if (projetosInfo && projetosInfo.hasProjetosColumn) {
       // 2. Verificar condições
-      const conditionMet = documentosInfo.totalFiles === 2 && documentosInfo.hasArtPdf;
+      const conditionMet = projetosInfo.allConditionsMet;
       result.conditionMet = conditionMet;
       result.steps.push(`Condição atendida: ${conditionMet}`);
       
       if (conditionMet) {
         // 3. Buscar subitem
-        const subitemInfo = await findSubitemByName(itemId, 'ABRIR O. S.');
+        const subitemInfo = await findSubitemByName(itemId, 'EXE. PROJETO');
         result.subitemInfo = subitemInfo;
         result.steps.push('Busca por subitem concluída');
         
@@ -441,7 +466,7 @@ app.post('/test-documentos', async (req, res) => {
     res.json(result);
     
   } catch (error) {
-    console.error('❌ Erro em /test-documentos:', error);
+    console.error('❌ Erro em /test-projetos:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
@@ -464,8 +489,3 @@ app.get('/webhook', (_req, res) => {
 
 const PORT = process.env.PORT || 1000;
 app.listen(PORT, () => console.log(`🚀 Server rodando na porta ${PORT} — BOOT_ID: ${BOOT_ID}`));
-
-// Log periódico para verificar se o servidor está vivo
-setInterval(() => {
-  console.log(`❤️  Servidor vivo - ${new Date().toISOString()}`);
-}, 300000); // A cada 5 minutos
