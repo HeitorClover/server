@@ -373,9 +373,76 @@ app.get('/boards', (_req, res) => {
   });
 });
 
-// Rota de teste para verificar um board específico
-app.get('/test-board/:boardId?', async (req, res) => {
-  const boardId = req.params.boardId || BOARD_IDS[0];
+// Rota de teste para verificar um board específico - CORRIGIDA
+app.get('/test-board', async (req, res) => {
+  const boardId = req.query.boardId || BOARD_IDS[0];
+  
+  try {
+    const query = `query {
+      boards(ids: ${boardId}) {
+        id
+        name
+        columns {
+          id
+          title
+          type
+        }
+        items_page (query: {limit: 10}) {
+          items {
+            id
+            name
+            parent_item {
+              id
+              name
+            }
+            column_values {
+              column {
+                id
+                title
+              }
+              text
+            }
+          }
+        }
+      }
+    }`;
+    
+    const data = await gql(query);
+    
+    if (data.boards && data.boards.length > 0) {
+      const board = data.boards[0];
+      const items = board.items_page?.items || [];
+      const subitems = items.filter(item => item.parent_item !== null);
+      
+      res.json({
+        status: 'success',
+        board: {
+          id: board.id,
+          name: board.name,
+          columns: board.columns,
+          total_items: items.length,
+          total_subitems: subitems.length,
+          subitems: subitems.slice(0, 5)
+        }
+      });
+    } else {
+      res.status(404).json({
+        status: 'error',
+        message: 'Board não encontrado'
+      });
+    }
+    
+  } catch (error) {
+    res.status(500).json({
+      status: 'error',
+      message: error.message
+    });
+  }
+});
+
+// Rota alternativa com parâmetro na URL (não opcional)
+app.get('/test-board/:boardId', async (req, res) => {
+  const boardId = req.params.boardId;
   
   try {
     const query = `query {
