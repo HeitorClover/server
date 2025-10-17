@@ -20,83 +20,6 @@ console.log(`BOOT_ID: ${BOOT_ID}`);
 console.log(`PID: ${process.pid}`);
 console.log('--------------------------------------------');
 
-// Função para formatar CPF
-function formatCPF(cpf) {
-  if (!cpf) return cpf;
-  
-  // Se for um objeto, extrai o valor
-  if (typeof cpf === 'object' && cpf.value) {
-    cpf = cpf.value;
-  }
-  
-  const numbersOnly = String(cpf).replace(/\D/g, '');
-  
-  // Verifica se tem 11 dígitos
-  if (numbersOnly.length !== 11) {
-    console.log(`⚠️ CPF não tem 11 dígitos: ${numbersOnly} (${numbersOnly.length} dígitos)`);
-    return cpf; // Retorna original se não tiver 11 dígitos
-  }
-  
-  // Formata: XXX.XXX.XXX-XX
-  const formatted = numbersOnly.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
-  console.log(`✅ CPF formatado: ${numbersOnly} -> ${formatted}`);
-  return formatted;
-}
-
-// Função para formatar telefone
-function formatPhone(phone) {
-  if (!phone) return phone;
-  
-  // Se for um objeto, extrai o valor
-  if (typeof phone === 'object' && phone.value) {
-    phone = phone.value;
-  }
-  
-  const numbersOnly = String(phone).replace(/\D/g, '');
-  
-  console.log(`📱 Formatando telefone: ${numbersOnly} (${numbersOnly.length} dígitos)`);
-  
-  // Verifica o tamanho do número
-  if (numbersOnly.length === 13) {
-    // Formato: 5588998685336 -> +55 (88) 99868-5336
-    const formatted = `+${numbersOnly.substring(0, 2)} (${numbersOnly.substring(2, 4)}) ${numbersOnly.substring(4, 9)}-${numbersOnly.substring(9)}`;
-    console.log(`✅ Telefone formatado: ${numbersOnly} -> ${formatted}`);
-    return formatted;
-  } else if (numbersOnly.length === 11) {
-    // Formato: 88998685336 -> (88) 99868-5336
-    const formatted = `(${numbersOnly.substring(0, 2)}) ${numbersOnly.substring(2, 7)}-${numbersOnly.substring(7)}`;
-    console.log(`✅ Telefone formatado: ${numbersOnly} -> ${formatted}`);
-    return formatted;
-  } else if (numbersOnly.length === 10) {
-    // Formato: 8899368533 -> (88) 9936-8533
-    const formatted = `(${numbersOnly.substring(0, 2)}) ${numbersOnly.substring(2, 6)}-${numbersOnly.substring(6)}`;
-    console.log(`✅ Telefone formatado: ${numbersOnly} -> ${formatted}`);
-    return formatted;
-  } else {
-    console.log(`⚠️ Telefone não tem formato reconhecido: ${numbersOnly} (${numbersOnly.length} dígitos)`);
-    return phone; // Retorna original se não tiver formato reconhecido
-  }
-}
-
-// Função para extrair o valor do objeto do Monday
-function extractValue(value) {
-  console.log(`🔍 Extraindo valor:`, JSON.stringify(value));
-  
-  if (typeof value === 'object' && value !== null) {
-    // Tenta diferentes propriedades que o Monday pode usar
-    if (value.value !== undefined) {
-      return value.value;
-    } else if (value.text !== undefined) {
-      return value.text;
-    } else {
-      // Se for objeto mas não tem propriedades conhecidas, converte para string
-      return String(value);
-    }
-  }
-  
-  return value;
-}
-
 // Função para fazer queries GraphQL
 async function gql(query) {
   console.log(`🔍 Executando query: ${query.substring(0, 100)}...`);
@@ -120,202 +43,301 @@ async function gql(query) {
   return data.data;
 }
 
-// Função para atualizar o valor formatado
-async function updateFormattedValue(itemId, boardId, columnId, formattedValue) {
+// Função para verificar arquivos na coluna DOCUMENTOS
+async function checkDocumentos(itemId) {
   try {
-    console.log(`🔄 Atualizando valor para: ${formattedValue}`);
+    console.log(`📁 Verificando arquivos na coluna DOCUMENTOS do item ${itemId}`);
     
-    // Para colunas de texto, enviamos o valor diretamente como string
-    const mutation = `mutation {
-      change_simple_column_value(
-        board_id: ${boardId},
-        item_id: ${itemId},
-        column_id: "${columnId}",
-        value: "${formattedValue.replace(/"/g, '\\"')}"
-      ) { id }
+    const query = `query {
+      items(ids: ${itemId}) {
+        id
+        name
+        column_values {
+          id
+          column {
+            title
+          }
+          value
+          ... on FileValue {
+            files {
+              id
+              name
+              url
+              created_at
+            }
+          }
+        }
+      }
     }`;
     
-    console.log(`📤 Enviando mutation:`, mutation);
+    const data = await gql(query);
     
-    const result = await gql(mutation);
-    console.log(`✅ Valor formatado atualizado com sucesso: ${formattedValue}`);
+    if (!data.items || data.items.length === 0) {
+      console.log('❌ Item não encontrado');
+      return null;
+    }
+    
+    const item = data.items[0];
+    
+    // Encontrar a coluna DOCUMENTOS
+    const documentosColumn = item.column_values.find(col => 
+      col.column && col.column.title === 'DOCUMENTOS'
+    );
+    
+    if (!documentosColumn) {
+      console.log('❌ Coluna DOCUMENTOS não encontrada');
+      return {
+        itemName: item.name,
+        hasDocumentosColumn: false,
+        files: []
+      };
+    }
+    
+    console.log('✅ Coluna DOCUMENTOS encontrada');
+    
+    // Extrair informações dos arquivos
+    let files = [];
+    if (documentosColumn.files && Array.isArray(documentosColumn.files)) {
+      files = documentosColumn.files;
+      console.log(`📊 Encontrados ${files.length} arquivo(s) na coluna DOCUMENTOS`);
+    } else {
+      console.log('ℹ️  Nenhum arquivo encontrado na coluna DOCUMENTOS');
+      
+      // Tentar extrair do campo value se files estiver vazio
+      if (documentosColumn.value) {
+        try {
+          const valueObj = JSON.parse(documentosColumn.value);
+          if (valueObj.files && Array.isArray(valueObj.files)) {
+            files = valueObj.files;
+            console.log(`📊 Encontrados ${files.length} arquivo(s) via campo value`);
+          }
+        } catch (e) {
+          console.log('ℹ️  Não foi possível extrair arquivos do campo value');
+        }
+      }
+    }
+    
+    // Formatar resposta
+    const result = {
+      itemName: item.name,
+      hasDocumentosColumn: true,
+      totalFiles: files.length,
+      files: files.map(file => ({
+        id: file.id,
+        name: file.name,
+        url: file.url,
+        created_at: file.created_at
+      })),
+      fileNames: files.map(file => file.name),
+      hasArtPdf: files.some(file => file.name && file.name.toLowerCase().includes('art.pdf'))
+    };
+    
+    console.log(`📋 Arquivos encontrados: ${result.fileNames.join(', ')}`);
+    console.log(`🎨 Tem ART.pdf: ${result.hasArtPdf}`);
+    
     return result;
-  } catch (error) {
-    console.error('❌ Erro ao atualizar valor:', error);
     
-    // Tentar método alternativo se o primeiro falhar
-    console.log('🔄 Tentando método alternativo...');
-    return await updateFormattedValueAlternative(itemId, boardId, columnId, formattedValue);
+  } catch (error) {
+    console.error('❌ Erro ao verificar documentos:', error);
+    throw error;
   }
 }
 
-// Método alternativo para atualizar coluna de texto
-async function updateFormattedValueAlternative(itemId, boardId, columnId, formattedValue) {
+// Função para buscar subitens pelo nome
+async function findSubitemByName(parentItemId, subitemName) {
   try {
-    // Método alternativo usando change_column_value com valor direto
+    console.log(`🔍 Buscando subitem "${subitemName}" no item ${parentItemId}`);
+    
+    const query = `query {
+      items(ids: ${parentItemId}) {
+        subitems {
+          id
+          name
+          board {
+            id
+            columns { id title type }
+          }
+          column_values {
+            id
+            column {
+              id
+              title
+              type
+            }
+            value
+            text
+          }
+        }
+      }
+    }`;
+    
+    const data = await gql(query);
+    
+    if (!data.items || data.items.length === 0 || !data.items[0].subitems) {
+      console.log('❌ Nenhum subitem encontrado');
+      return null;
+    }
+    
+    const subitems = data.items[0].subitems;
+    console.log(`📋 Encontrados ${subitems.length} subitens`);
+    
+    // Procurar pelo subitem com nome exato "ABRIR O. S."
+    const targetSubitem = subitems.find(subitem => 
+      subitem.name && subitem.name.trim() === 'ABRIR O. S.'
+    );
+    
+    if (targetSubitem) {
+      console.log(`✅ Subitem "${subitemName}" encontrado: ID ${targetSubitem.id}`);
+      
+      // Encontrar a coluna "CONCLUIDO"
+      const concluidoColumn = targetSubitem.column_values.find(col => 
+        col.column && col.column.title === 'CONCLUIDO'
+      );
+      
+      return {
+        subitem: targetSubitem,
+        concluidoColumn: concluidoColumn
+      };
+    } else {
+      console.log(`❌ Subitem "${subitemName}" não encontrado`);
+      console.log(`📋 Subitens disponíveis: ${subitems.map(s => s.name).join(', ')}`);
+      return null;
+    }
+    
+  } catch (error) {
+    console.error('❌ Erro ao buscar subitens:', error);
+    throw error;
+  }
+}
+
+// Função para marcar coluna CONCLUIDO como verdadeira
+async function markConcluido(subitemId, boardId, columnId) {
+  try {
+    console.log(`✅ Marcando coluna CONCLUIDO como verdadeira no subitem ${subitemId}`);
+    
+    // Para colunas do tipo "checkbox" ou "signal", usamos valor booleano
     const mutation = `mutation {
       change_column_value(
         board_id: ${boardId},
-        item_id: ${itemId},
+        item_id: ${subitemId},
         column_id: "${columnId}",
-        value: "${formattedValue.replace(/"/g, '\\"')}"
+        value: "{\\"checked\\":\\"true\\"}"
       ) { id }
     }`;
     
-    console.log(`📤 Enviando mutation alternativa:`, mutation);
+    console.log(`📤 Enviando mutation para marcar como concluído`);
     
     const result = await gql(mutation);
-    console.log(`✅ Valor formatado atualizado com sucesso (método alternativo): ${formattedValue}`);
+    console.log(`✅ Coluna CONCLUIDO marcada com sucesso!`);
     return result;
+    
+  } catch (error) {
+    console.error('❌ Erro ao marcar como concluído:', error);
+    
+    // Tentar método alternativo
+    console.log('🔄 Tentando método alternativo...');
+    return await markConcluidoAlternative(subitemId, boardId, columnId);
+  }
+}
+
+// Método alternativo para marcar como concluído
+async function markConcluidoAlternative(subitemId, boardId, columnId) {
+  try {
+    // Método alternativo usando change_simple_column_value
+    const mutation = `mutation {
+      change_simple_column_value(
+        board_id: ${boardId},
+        item_id: ${subitemId},
+        column_id: "${columnId}",
+        value: "true"
+      ) { id }
+    }`;
+    
+    console.log(`📤 Enviando mutation alternativa para marcar como concluído`);
+    
+    const result = await gql(mutation);
+    console.log(`✅ Coluna CONCLUIDO marcada com sucesso (método alternativo)!`);
+    return result;
+    
   } catch (error) {
     console.error('❌ Erro no método alternativo:', error);
     throw error;
   }
 }
 
-// Função para obter informações do item
-async function getItemInfo(itemId) {
-  const query = `query {
-    items(ids: ${itemId}) {
-      id
-      name
-      board {
-        id
-        columns { id title type }
-      }
-      column_values {
-        column {
-          id
-          title
-        }
-        text
-        value
-      }
-    }
-  }`;
-  
-  console.log(`🔍 Buscando informações do item ${itemId}`);
-  const data = await gql(query);
-  
-  if (!data.items || data.items.length === 0) {
-    console.error(`❌ Item ${itemId} não encontrado`);
-    return null;
-  }
-  
-  const item = data.items[0];
-  console.log(`📋 Item encontrado: "${item.name}" no board ${item.board.id}`);
-  return item;
-}
-
-// Processar webhook do Monday
-async function processWebhook(body) {
-  console.log('📦 Webhook recebido - Iniciando processamento...');
+// Processar webhook do Monday para DOCUMENTOS
+async function processDocumentosWebhook(body) {
+  console.log('📦 Webhook DOCUMENTOS recebido - Iniciando processamento...');
   
   try {
     const event = body.event;
+    const itemId = event.pulseId;
     
-    if (!event) {
-      console.log('❌ Nenhum evento encontrado no body');
+    if (!itemId) {
+      console.log('❌ Item ID não encontrado no evento');
       return;
     }
     
-    console.log(`🔍 Tipo de evento: ${event.type}`);
-    console.log(`🔍 Coluna alterada: "${event.columnTitle}"`);
-
-    // Verificar se é uma mudança em coluna que queremos formatar
-    if (event.type === 'update_column_value') {
-      console.log('📋 Evento de atualização de coluna detectado');
+    console.log(`🔍 Processando item: ${itemId}`);
+    
+    // 1. Verificar os arquivos na coluna DOCUMENTOS
+    const documentosInfo = await checkDocumentos(itemId);
+    
+    if (!documentosInfo || !documentosInfo.hasDocumentosColumn) {
+      console.log('❌ Informações de documentos não disponíveis');
+      return;
+    }
+    
+    console.log(`📊 RESUMO DOCUMENTOS:`);
+    console.log(`   Item: ${documentosInfo.itemName}`);
+    console.log(`   Total de arquivos: ${documentosInfo.totalFiles}`);
+    console.log(`   Tem ART.pdf: ${documentosInfo.hasArtPdf}`);
+    
+    if (documentosInfo.totalFiles > 0) {
+      console.log(`   Arquivos: ${documentosInfo.fileNames.join(', ')}`);
+    }
+    
+    // 2. Verificar condições: 2 arquivos E um deles é ART.pdf
+    if (documentosInfo.totalFiles === 2 && documentosInfo.hasArtPdf) {
+      console.log('🎯 CONDIÇÃO ATENDIDA: 2 documentos e um deles é ART.pdf');
       
-      const itemId = event.pulseId;
-      const columnId = event.columnId;
-      const rawValue = event.value;
-      const columnTitle = event.columnTitle;
+      // 3. Procurar o subitem "ABRIR O. S."
+      const subitemInfo = await findSubitemByName(itemId, 'ABRIR O. S.');
       
-      console.log(`📊 Item ID: ${itemId}, Column ID: ${columnId}`);
-      console.log(`📊 Valor bruto:`, JSON.stringify(rawValue));
-      
-      if (!itemId) {
-        console.log('❌ Item ID não encontrado no evento');
-        return;
-      }
-      
-      // Extrair o valor real do objeto
-      const extractedValue = extractValue(rawValue);
-      console.log(`📝 Valor extraído: ${extractedValue}`);
-      
-      let formattedValue;
-      let shouldUpdate = false;
-      
-      // Verificar qual coluna foi alterada e aplicar formatação correspondente
-      if (columnTitle.toLowerCase() === 'cpf') {
-        console.log(`🎯 Coluna CPF detectada!`);
+      if (subitemInfo && subitemInfo.subitem && subitemInfo.concluidoColumn) {
+        console.log('✅ Subitem e coluna CONCLUIDO encontrados');
         
-        // Formatando o CPF
-        formattedValue = formatCPF(extractedValue);
-        
-        // Verificar se o CPF já está formatado (para evitar loop)
-        if (formattedValue !== extractedValue) {
-          shouldUpdate = true;
-          console.log(`🔧 Formatando CPF: ${extractedValue} -> ${formattedValue}`);
-        } else {
-          console.log('ℹ️  CPF já está formatado, nenhuma ação necessária');
-        }
-        
-      } else if (columnTitle.toLowerCase().includes('número') || 
-                 columnTitle.toLowerCase().includes('numero') ||
-                 columnTitle.toLowerCase().includes('telefone') ||
-                 columnTitle.toLowerCase().includes('celular') ||
-                 columnTitle.toLowerCase().includes('phone')) {
-        
-        console.log(`🎯 Coluna de telefone detectada: "${columnTitle}"`);
-        
-        // Formatando o telefone
-        formattedValue = formatPhone(extractedValue);
-        
-        // Verificar se o telefone já está formatado (para evitar loop)
-        if (formattedValue !== extractedValue) {
-          shouldUpdate = true;
-          console.log(`🔧 Formatando telefone: ${extractedValue} -> ${formattedValue}`);
-        } else {
-          console.log('ℹ️  Telefone já está formatado, nenhuma ação necessária');
-        }
-      } else {
-        console.log(`⚠️  Coluna não suportada: "${columnTitle}"`);
-        return;
-      }
-      
-      // Se precisamos atualizar, prosseguir com a atualização
-      if (shouldUpdate) {
-        // Obter informações do item para pegar o boardId
-        const itemInfo = await getItemInfo(itemId);
-        
-        if (!itemInfo) {
-          console.log('❌ Não foi possível obter informações do item');
-          return;
-        }
-        
-        // Atualizar com o valor formatado
-        await updateFormattedValue(
-          itemId, 
-          itemInfo.board.id, 
-          columnId, 
-          formattedValue
+        // 4. Marcar a coluna CONCLUIDO como verdadeira
+        await markConcluido(
+          subitemInfo.subitem.id,
+          subitemInfo.subitem.board.id,
+          subitemInfo.concluidoColumn.column.id
         );
         
-        console.log('✅ Processamento do webhook concluído com sucesso!');
+        console.log('🎉 PROCESSO CONCLUÍDO: Subitem ABRIR O. S. marcado como CONCLUIDO!');
+        
+      } else {
+        console.log('❌ Subitem ABRIR O. S. ou coluna CONCLUIDO não encontrados');
+        if (subitemInfo && subitemInfo.subitem && !subitemInfo.concluidoColumn) {
+          console.log('⚠️  Subitem encontrado mas coluna CONCLUIDO não existe');
+        }
       }
       
     } else {
-      console.log(`⚠️  Tipo de evento não suportado: ${event.type}`);
+      console.log('ℹ️  Condição não atendida:');
+      console.log(`   - Esperado: 2 arquivos | Encontrado: ${documentosInfo.totalFiles}`);
+      console.log(`   - Esperado: ART.pdf presente | Encontrado: ${documentosInfo.hasArtPdf}`);
     }
     
+    console.log('✅ Processamento do webhook DOCUMENTOS concluído!');
+    
   } catch (error) {
-    console.error('❌ Erro ao processar webhook:', error);
+    console.error('❌ Erro ao processar webhook DOCUMENTOS:', error);
     console.error('Stack trace:', error.stack);
   }
 }
 
-// Rota webhook
+// Rota webhook principal
 app.post('/webhook', (req, res) => {
   console.log('📍 POST /webhook recebido');
   
@@ -330,11 +352,64 @@ app.post('/webhook', (req, res) => {
   console.log('✅ Respondendo 200 OK para Monday');
   res.status(200).json({ ok: true, boot: BOOT_ID, received: true });
   
-  // Processar o webhook em segundo plano
-  console.log('🔄 Iniciando processamento em background...');
-  processWebhook(body).catch(error => {
-    console.error('💥 Erro não tratado no processamento do webhook:', error);
-  });
+  // Processar o webhook em segundo plano apenas se for da coluna DOCUMENTOS
+  if (body.event && body.event.columnTitle === 'DOCUMENTOS') {
+    console.log('🔄 Iniciando processamento DOCUMENTOS em background...');
+    processDocumentosWebhook(body).catch(error => {
+      console.error('💥 Erro não tratado no processamento do webhook:', error);
+    });
+  } else {
+    console.log('ℹ️  Webhook não é da coluna DOCUMENTOS, ignorando...');
+  }
+});
+
+// Rota para teste manual
+app.post('/test-documentos', async (req, res) => {
+  try {
+    console.log('📍 POST /test-documentos recebido');
+    const { itemId } = req.body;
+    
+    if (!itemId) {
+      return res.status(400).json({ error: 'itemId é obrigatório' });
+    }
+    
+    // Simular o processamento completo
+    const result = {
+      itemId: itemId,
+      steps: []
+    };
+    
+    // 1. Verificar documentos
+    const documentosInfo = await checkDocumentos(itemId);
+    result.documentosInfo = documentosInfo;
+    result.steps.push('Verificação de documentos concluída');
+    
+    if (documentosInfo && documentosInfo.hasDocumentosColumn) {
+      // 2. Verificar condições
+      const conditionMet = documentosInfo.totalFiles === 2 && documentosInfo.hasArtPdf;
+      result.conditionMet = conditionMet;
+      result.steps.push(`Condição atendida: ${conditionMet}`);
+      
+      if (conditionMet) {
+        // 3. Buscar subitem
+        const subitemInfo = await findSubitemByName(itemId, 'ABRIR O. S.');
+        result.subitemInfo = subitemInfo;
+        result.steps.push('Busca por subitem concluída');
+        
+        if (subitemInfo && subitemInfo.subitem && subitemInfo.concluidoColumn) {
+          // 4. Marcar como concluído (apenas em teste não executa de verdade)
+          result.steps.push('SIMULAÇÃO: Subitem seria marcado como CONCLUIDO');
+          result.wouldMarkConcluido = true;
+        }
+      }
+    }
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('❌ Erro em /test-documentos:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
 });
 
 // Rota de health check
@@ -353,26 +428,5 @@ app.get('/webhook', (_req, res) => {
   });
 });
 
-// Rota de debug para testar manualmente
-app.post('/test-cpf', (req, res) => {
-  console.log('📍 POST /test-cpf recebido');
-  const { cpf } = req.body;
-  const formatted = formatCPF(cpf);
-  res.json({ original: cpf, formatted: formatted });
-});
-
-// Rota de debug para testar manualmente telefone
-app.post('/test-phone', (req, res) => {
-  console.log('📍 POST /test-phone recebido');
-  const { phone } = req.body;
-  const formatted = formatPhone(phone);
-  res.json({ original: phone, formatted: formatted });
-});
-
 const PORT = process.env.PORT || 1000;
 app.listen(PORT, () => console.log(`🚀 Server rodando na porta ${PORT} — BOOT_ID: ${BOOT_ID}`));
-
-// Log periódico para verificar se o servidor está vivo
-setInterval(() => {
-  console.log(`❤️  Servidor vivo - ${new Date().toISOString()}`);
-}, 300000); // A cada 5 minutos
