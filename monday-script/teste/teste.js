@@ -43,11 +43,12 @@ async function gql(query) {
   return data.data;
 }
 
-// Função para verificar arquivos na coluna DOCUMENTOS (CORRIGIDA)
+// Função para verificar arquivos na coluna DOCUMENTOS (QUERY CORRIGIDA)
 async function checkDocumentos(itemId) {
   try {
     console.log(`📁 Verificando arquivos na coluna DOCUMENTOS do item ${itemId}`);
     
+    // QUERY CORRIGIDA - usando a estrutura atual do Monday
     const query = `query {
       items(ids: ${itemId}) {
         id
@@ -58,25 +59,7 @@ async function checkDocumentos(itemId) {
             title
           }
           value
-          ... on FileValue {
-            files {
-              ... on FileAssetValue {
-                id
-                name
-                url
-              }
-              ... on FileDocValue {
-                id
-                name
-                url
-              }
-              ... on FileLinkValue {
-                id
-                name
-                url
-              }
-            }
-          }
+          text
         }
       }
     }`;
@@ -105,36 +88,53 @@ async function checkDocumentos(itemId) {
     }
     
     console.log('✅ Coluna DOCUMENTOS encontrada');
+    console.log(`📊 Valor da coluna: ${documentosColumn.value}`);
+    console.log(`📊 Texto da coluna: ${documentosColumn.text}`);
     
-    // Extrair informações dos arquivos - método correto
+    // Extrair informações dos arquivos do campo value (método mais confiável)
     let files = [];
     
-    // Método 1: Tentar extrair dos fragments GraphQL
-    if (documentosColumn.files && Array.isArray(documentosColumn.files)) {
-      files = documentosColumn.files;
-      console.log(`📊 Encontrados ${files.length} arquivo(s) via fragment GraphQL`);
-    } 
-    // Método 2: Tentar extrair do campo value (fallback)
-    else if (documentosColumn.value) {
+    if (documentosColumn.value) {
       try {
         const valueObj = JSON.parse(documentosColumn.value);
+        
         if (valueObj.files && Array.isArray(valueObj.files)) {
           files = valueObj.files;
-          console.log(`📊 Encontrados ${files.length} arquivo(s) via campo value`);
-        } else if (valueObj && Array.isArray(valueObj)) {
+          console.log(`📊 Encontrados ${files.length} arquivo(s) via campo value (files array)`);
+        } else if (Array.isArray(valueObj)) {
           files = valueObj;
-          console.log(`📊 Encontrados ${files.length} arquivo(s) via array value`);
+          console.log(`📊 Encontrados ${files.length} arquivo(s) via campo value (direct array)`);
+        } else if (valueObj.assets && Array.isArray(valueObj.assets)) {
+          files = valueObj.assets;
+          console.log(`📊 Encontrados ${files.length} arquivo(s) via campo value (assets)`);
         }
       } catch (e) {
-        console.log('ℹ️  Não foi possível extrair arquivos do campo value');
+        console.log('ℹ️  Não foi possível extrair arquivos do campo value como JSON');
+      }
+    }
+    
+    // Se não encontrou arquivos pelo value, tentar extrair do text
+    if (files.length === 0 && documentosColumn.text) {
+      console.log('🔄 Tentando extrair informações do campo text...');
+      
+      // O campo text geralmente contém os nomes dos arquivos separados por vírgula
+      const fileNames = documentosColumn.text.split(',').map(name => name.trim()).filter(name => name);
+      
+      if (fileNames.length > 0) {
+        files = fileNames.map((name, index) => ({
+          id: `file-${index}`,
+          name: name,
+          url: ''
+        }));
+        console.log(`📊 Encontrados ${files.length} arquivo(s) via campo text`);
       }
     }
     
     // Garantir que temos informações básicas dos arquivos
     const processedFiles = files.map(file => ({
-      id: file.id || 'unknown',
-      name: file.name || 'arquivo_sem_nome',
-      url: file.url || ''
+      id: file.id || file.asset_id || file.fileId || `file-${Date.now()}-${Math.random()}`,
+      name: file.name || file.file_name || file.filename || 'arquivo_sem_nome',
+      url: file.url || file.file_url || ''
     }));
     
     // Formatar resposta
@@ -464,3 +464,8 @@ app.get('/webhook', (_req, res) => {
 
 const PORT = process.env.PORT || 1000;
 app.listen(PORT, () => console.log(`🚀 Server rodando na porta ${PORT} — BOOT_ID: ${BOOT_ID}`));
+
+// Log periódico para verificar se o servidor está vivo
+setInterval(() => {
+  console.log(`❤️  Servidor vivo - ${new Date().toISOString()}`);
+}, 300000); // A cada 5 minutos
