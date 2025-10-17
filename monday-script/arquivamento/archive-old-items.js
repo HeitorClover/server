@@ -12,122 +12,106 @@ if (!API_KEY) {
   process.exit(1);
 }
 
+// IDs dos boards fixos no código
+const BOARD_IDS = [
+  7991681616, 7973161158, 7973161262, 18032049508, 
+  7973161359, 7973161448, 7973161553, 7973161664, 18183607637
+];
+
 const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
+const UPDATE_INTERVAL = 5 * 60 * 1000; // 5 minutos
 
 console.log('--------------------------------------------');
 console.log(`STARTUP: ${new Date().toISOString()}`);
 console.log(`BOOT_ID: ${BOOT_ID}`);
-console.log(`PID: ${process.pid}`);
+console.log(`BOARDS: ${BOARD_IDS.join(', ')}`);
+console.log(`TOTAL BOARDS: ${BOARD_IDS.length}`);
+console.log(`UPDATE_INTERVAL: ${UPDATE_INTERVAL}ms (5 minutos)`);
 console.log('--------------------------------------------');
 
 // Função para extrair data e hora do formato do Monday
 function extractMondayDate(dateValue) {
-  console.log(`📅 Extraindo data do Monday:`, dateValue);
-  
-  if (!dateValue) {
-    return null;
-  }
+  if (!dateValue) return null;
   
   try {
-    // Se for string, tenta parsear como JSON
     if (typeof dateValue === 'string') {
       const dateObj = JSON.parse(dateValue);
       if (dateObj && dateObj.date && dateObj.time) {
-        const dateTimeString = `${dateObj.date}T${dateObj.time}`;
-        console.log(`✅ Data extraída: ${dateTimeString}`);
-        return dateTimeString;
+        return `${dateObj.date}T${dateObj.time}`;
       }
-    }
-    // Se já for objeto
-    else if (typeof dateValue === 'object' && dateValue.date && dateValue.time) {
-      const dateTimeString = `${dateValue.date}T${dateValue.time}`;
-      console.log(`✅ Data extraída: ${dateTimeString}`);
-      return dateTimeString;
+    } else if (typeof dateValue === 'object' && dateValue.date && dateValue.time) {
+      return `${dateValue.date}T${dateValue.time}`;
     }
   } catch (error) {
-    console.log('❌ Erro ao extrair data do Monday:', error);
+    console.log('❌ Erro ao extrair data:', error);
   }
-  
   return null;
 }
 
-// Função para calcular diferença entre datas e formatar
-function calculateAndFormatDateDifference(startDateValue, endDateValue) {
-  console.log(`📅 Calculando diferença entre datas:`);
-  
-  const startDate = extractMondayDate(startDateValue);
-  const endDate = extractMondayDate(endDateValue);
-  
-  console.log(`   Início: ${startDate}`);
-  console.log(`   Fim: ${endDate}`);
-  
-  if (!startDate || !endDate) {
-    console.log('⚠️  Uma ou ambas as datas estão vazias ou inválidas');
-    return 'Datas incompletas';
+// Função para verificar se uma data do Monday está vazia
+function isMondayDateEmpty(dateValue) {
+  if (!dateValue) return true;
+  try {
+    if (typeof dateValue === 'string') {
+      const dateObj = JSON.parse(dateValue);
+      return !dateObj || !dateObj.date;
+    }
+    return !dateValue.date;
+  } catch (error) {
+    return true;
   }
+}
+
+// Função para calcular diferença entre datas e formatar
+function calculateAndFormatDateDifference(startDateValue, endDateValue = null) {
+  const startDate = extractMondayDate(startDateValue);
+  if (!startDate) return 'Data inicial inválida';
+  
+  const endDate = endDateValue ? extractMondayDate(endDateValue) : new Date().toISOString();
+  if (!endDate) return 'Data final inválida';
   
   try {
-    // Converter as datas para objetos Date
     const start = new Date(startDate);
     const end = new Date(endDate);
     
     if (isNaN(start.getTime()) || isNaN(end.getTime())) {
-      console.log('❌ Datas inválidas após conversão');
       return 'Datas inválidas';
     }
     
-    // Calcular diferença em milissegundos
     const diffMs = end - start;
+    if (diffMs < 0) return 'Data final anterior à inicial';
     
-    if (diffMs < 0) {
-      return 'Data final anterior à inicial';
-    }
-    
-    // Calcular dias, horas, minutos e segundos
     const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
     const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
     const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
     const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
     
-    // Formatar a string
     let result = '';
     if (days > 0) result += `${days} dias, `;
     if (hours > 0) result += `${hours} horas, `;
     if (minutes > 0) result += `${minutes} minutos, `;
     result += `${seconds} segundos`;
     
-    console.log(`✅ Diferença calculada: ${result}`);
     return result;
     
   } catch (error) {
-    console.error('❌ Erro ao calcular diferença de datas:', error);
     return 'Erro no cálculo';
   }
 }
 
 // Função para extrair o valor do objeto do Monday
 function extractValue(value) {
-  console.log(`🔍 Extraindo valor:`, JSON.stringify(value));
-  
   if (typeof value === 'object' && value !== null) {
-    if (value.value !== undefined) {
-      return value.value;
-    } else if (value.text !== undefined) {
-      return value.text;
-    } else if (value.date !== undefined) {
-      return value;
-    } else {
-      return String(value);
-    }
+    if (value.value !== undefined) return value.value;
+    if (value.text !== undefined) return value.text;
+    if (value.date !== undefined) return value;
+    return String(value);
   }
-  
   return value;
 }
 
 // Função para fazer queries GraphQL
 async function gql(query) {
-  console.log(`🔍 Executando query: ${query.substring(0, 100)}...`);
-  
   const r = await fetch('https://api.monday.com/v2', {
     method: 'POST',
     headers: { 
@@ -150,9 +134,6 @@ async function gql(query) {
 // Função para atualizar a coluna DURAÇÃO
 async function updateDurationColumn(itemId, boardId, columnId, durationText) {
   try {
-    console.log(`🔄 Atualizando coluna DURAÇÃO: "${durationText}"`);
-    
-    // Para coluna de texto, usamos change_simple_column_value
     const mutation = `mutation {
       change_simple_column_value(
         board_id: ${boardId},
@@ -162,204 +143,177 @@ async function updateDurationColumn(itemId, boardId, columnId, durationText) {
       ) { id }
     }`;
     
-    console.log(`📤 Enviando mutation para atualizar DURAÇÃO`);
-    
-    const result = await gql(mutation);
-    console.log(`✅ DURAÇÃO atualizada com sucesso: ${durationText}`);
-    return result;
+    await gql(mutation);
+    return true;
   } catch (error) {
     console.error('❌ Erro ao atualizar DURAÇÃO:', error);
-    throw error;
+    return false;
   }
 }
 
-// Função para obter informações do SUBITEM
-async function getSubitemInfo(itemId) {
+// Função para buscar todos os subitens de UM board
+async function getSubitemsFromBoard(boardId) {
   const query = `query {
-    items(ids: ${itemId}) {
-      id
-      name
-      board {
-        id
-        columns { id title type }
-      }
-      column_values {
-        column {
-          id
-          title
-        }
-        text
-        value
-      }
-      parent_item {
+    boards(ids: ${boardId}) {
+      items {
         id
         name
+        board { id }
+        column_values {
+          column { id title }
+          text
+          value
+        }
+        parent_item { id name }
       }
     }
   }`;
   
-  console.log(`🔍 Buscando informações do subitem ${itemId}`);
   const data = await gql(query);
   
-  if (!data.items || data.items.length === 0) {
-    console.error(`❌ Subitem ${itemId} não encontrado`);
-    return null;
+  if (!data.boards || data.boards.length === 0) {
+    console.error(`❌ Board ${boardId} não encontrado`);
+    return [];
   }
   
-  const item = data.items[0];
-  console.log(`📋 Subitem encontrado: "${item.name}"`);
-  console.log(`📋 Item pai: ${item.parent_item ? item.parent_item.name : 'N/A'}`);
-  return item;
+  const items = data.boards[0].items;
+  const subitems = items.filter(item => item.parent_item !== null);
+  
+  console.log(`📋 Board ${boardId}: ${subitems.length} subitens encontrados`);
+  return subitems;
 }
 
-// Função para encontrar coluna pelo título exato
+// Função para buscar subitens de TODOS os boards
+async function getAllSubitemsFromAllBoards() {
+  console.log(`🔍 Buscando subitens de ${BOARD_IDS.length} boards...`);
+  
+  let allSubitems = [];
+  
+  for (const boardId of BOARD_IDS) {
+    try {
+      const subitems = await getSubitemsFromBoard(boardId);
+      allSubitems = allSubitems.concat(subitems.map(subitem => ({
+        ...subitem,
+        sourceBoard: boardId
+      })));
+      
+      // Pequena pausa entre boards
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+    } catch (error) {
+      console.error(`❌ Erro ao buscar do board ${boardId}:`, error.message);
+    }
+  }
+  
+  console.log(`📊 Total: ${allSubitems.length} subitens em todos os boards`);
+  return allSubitems;
+}
+
+// Função para encontrar coluna pelo título
 function findColumnByTitle(columns, title) {
-  const found = columns.find(col => 
+  return columns.find(col => 
     col.column.title.toLowerCase() === title.toLowerCase()
   );
-  
-  if (found) {
-    console.log(`✅ Coluna encontrada: "${found.column.title}" (${found.column.id})`);
-  } else {
-    console.log(`❌ Coluna não encontrada: "${title}"`);
-  }
-  
-  return found;
 }
 
-// Processar webhook do Monday para SUBITENS
-async function processWebhook(body) {
-  console.log('📦 Webhook recebido - Iniciando processamento para SUBITEM...');
+// Função para processar um subitem individual
+async function processSubitem(subitem) {
+  try {
+    const inicioColumn = findColumnByTitle(subitem.column_values, 'INICIO');
+    const finalizacaoColumn = findColumnByTitle(subitem.column_values, 'FINALIZAÇÃO');
+    const duracaoColumn = findColumnByTitle(subitem.column_values, 'DURAÇÃO');
+    
+    if (!inicioColumn || !duracaoColumn) {
+      return false;
+    }
+    
+    const inicioValue = extractValue(inicioColumn.value);
+    const finalizacaoValue = finalizacaoColumn ? extractValue(finalizacaoColumn.value) : null;
+    
+    const isFinalizacaoEmpty = !finalizacaoColumn || isMondayDateEmpty(finalizacaoValue);
+    
+    let durationText;
+    if (isFinalizacaoEmpty) {
+      durationText = calculateAndFormatDateDifference(inicioValue);
+    } else {
+      durationText = calculateAndFormatDateDifference(inicioValue, finalizacaoValue);
+    }
+    
+    const success = await updateDurationColumn(
+      subitem.id, 
+      subitem.board.id, 
+      duracaoColumn.column.id, 
+      durationText
+    );
+    
+    return success;
+  } catch (error) {
+    console.error(`❌ Erro no subitem ${subitem.id}:`, error.message);
+    return false;
+  }
+}
+
+// Função principal que atualiza todas as durações
+async function updateAllDurations() {
+  console.log(`\n🔄 [${new Date().toISOString()}] Iniciando atualização em ${BOARD_IDS.length} boards...`);
   
   try {
-    const event = body.event;
+    const subitems = await getAllSubitemsFromAllBoards();
+    let updatedCount = 0;
     
-    if (!event) {
-      console.log('❌ Nenhum evento encontrado no body');
-      return;
+    for (const subitem of subitems) {
+      const success = await processSubitem(subitem);
+      if (success) updatedCount++;
+      
+      // Pequena pausa para não sobrecarregar
+      await new Promise(resolve => setTimeout(resolve, 100));
     }
     
-    console.log(`🔍 Tipo de evento: ${event.type}`);
-    console.log(`🔍 Coluna alterada: "${event.columnTitle}"`);
-
-    // Verificar se é uma mudança na coluna FINALIZAÇÃO
-    if (event.type === 'update_column_value' && 
-        event.columnTitle.toLowerCase().includes('finalização')) {
-      
-      console.log('🎯 Coluna FINALIZAÇÃO alterada em SUBITEM!');
-      
-      const subitemId = event.pulseId;
-      const rawValue = event.value;
-      
-      console.log(`📊 Subitem ID: ${subitemId}`);
-      
-      if (!subitemId) {
-        console.log('❌ Subitem ID não encontrado no evento');
-        return;
-      }
-      
-      // Obter informações completas do SUBITEM
-      const subitemInfo = await getSubitemInfo(subitemId);
-      
-      if (!subitemInfo) {
-        console.log('❌ Não foi possível obter informações do subitem');
-        return;
-      }
-      
-      // Encontrar as colunas INICIO, FINALIZAÇÃO e DURAÇÃO
-      const inicioColumn = findColumnByTitle(subitemInfo.column_values, 'INICIO');
-      const finalizacaoColumn = findColumnByTitle(subitemInfo.column_values, 'FINALIZAÇÃO');
-      const duracaoColumn = findColumnByTitle(subitemInfo.column_values, 'DURAÇÃO');
-      
-      if (!inicioColumn || !finalizacaoColumn) {
-        console.log('❌ Colunas INICIO e/ou FINALIZAÇÃO não encontradas no subitem');
-        return;
-      }
-      
-      if (!duracaoColumn) {
-        console.log('❌ Coluna DURAÇÃO não encontrada no subitem. Crie uma coluna de texto com esse nome.');
-        return;
-      }
-      
-      // Extrair valores das datas (agora mantemos o objeto completo para extractMondayDate)
-      const inicioValue = extractValue(inicioColumn.value);
-      const finalizacaoValue = extractValue(finalizacaoColumn.value);
-      
-      console.log(`📅 Data INICIO bruta:`, inicioValue);
-      console.log(`📅 Data FINALIZAÇÃO bruta:`, finalizacaoValue);
-      
-      // Calcular diferença formatada
-      const durationText = calculateAndFormatDateDifference(inicioValue, finalizacaoValue);
-      
-      // Atualizar coluna DURAÇÃO
-      await updateDurationColumn(
-        subitemId, 
-        subitemInfo.board.id, 
-        duracaoColumn.column.id, 
-        durationText
-      );
-      
-      console.log('✅ Processamento do webhook para SUBITEM concluído com sucesso!');
-      
-    } else {
-      console.log(`⚠️  Evento ignorado: não é alteração na coluna FINALIZAÇÃO`);
-    }
+    console.log(`✅ [${new Date().toISOString()}] Concluído: ${updatedCount}/${subitems.length} subitens atualizados`);
     
   } catch (error) {
-    console.error('❌ Erro ao processar webhook:', error);
-    console.error('Stack trace:', error.stack);
+    console.error(`💥 Erro geral:`, error);
   }
 }
 
-// Rota webhook
-app.post('/webhook', (req, res) => {
-  console.log('📍 POST /webhook recebido');
-  
-  const body = req.body || {};
-  
-  // Responder imediatamente para o Monday
-  if (body.challenge) {
-    console.log('🔐 Challenge recebido:', body.challenge);
-    return res.status(200).json({ challenge: body.challenge });
-  }
-  
-  console.log('✅ Respondendo 200 OK para Monday');
-  res.status(200).json({ ok: true, boot: BOOT_ID, received: true });
-  
-  // Processar o webhook em segundo plano
-  console.log('🔄 Iniciando processamento em background...');
-  processWebhook(body).catch(error => {
-    console.error('💥 Erro não tratado no processamento do webhook:', error);
-  });
-});
+// Iniciar serviço de atualização
+function startUpdateService() {
+  console.log('🚀 Serviço iniciado - Atualização automática a cada 5 minutos');
+  updateAllDurations();
+  setInterval(updateAllDurations, UPDATE_INTERVAL);
+}
 
-// Rota de health check
+// Rotas
 app.get('/', (_req, res) => {
-  console.log('📍 GET / recebido');
-  res.send(`Servidor rodando — BOOT_ID: ${BOOT_ID}`);
-});
-
-app.get('/webhook', (_req, res) => {
-  console.log('📍 GET /webhook recebido');
   res.json({ 
-    status: 'ok', 
-    now: new Date().toISOString(), 
+    status: 'Servidor rodando',
     boot_id: BOOT_ID,
-    message: 'Webhook endpoint está funcionando'
+    boards: BOARD_IDS,
+    total_boards: BOARD_IDS.length,
+    update_interval: '5 minutos',
+    next_update: new Date(Date.now() + UPDATE_INTERVAL).toISOString()
   });
 });
 
-// Rota de debug para testar cálculo de datas
-app.post('/test-dates', (req, res) => {
-  console.log('📍 POST /test-dates recebido');
-  const { inicio, finalizacao } = req.body;
-  const duration = calculateAndFormatDateDifference(inicio, finalizacao);
+app.post('/force-update', async (_req, res) => {
+  console.log('📍 Atualização forçada solicitada');
   res.json({ 
-    inicio: inicio, 
-    finalizacao: finalizacao, 
-    duracao: duration 
+    status: 'Atualização iniciada',
+    boards: BOARD_IDS,
+    timestamp: new Date().toISOString()
+  });
+  await updateAllDurations();
+});
+
+app.get('/boards', (_req, res) => {
+  res.json({
+    boards: BOARD_IDS,
+    count: BOARD_IDS.length
   });
 });
 
 const PORT = process.env.PORT || 1000;
-app.listen(PORT, () => console.log(`🚀 Server rodando na porta ${PORT} — BOOT_ID: ${BOOT_ID}`));
+app.listen(PORT, () => {
+  console.log(`🌐 Servidor rodando na porta ${PORT}`);
+  startUpdateService();
+});
