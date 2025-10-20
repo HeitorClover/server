@@ -17,7 +17,7 @@ const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
 
 const DATE_COL_TITLE = 'FINALIZAÇÃO';
 
-// Status aceit
+// Status aceitos
 const ACCEPT = [
 // 01 - Atendimento: 
   'abrir conta', 'documentos', 'caixaaqui', 'assinatura', 'conformidade', 'conta ativa', 
