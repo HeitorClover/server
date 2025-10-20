@@ -14,7 +14,7 @@ if (!API_KEY) {
 
 const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
 
-// 
+
 const DATE_COL_TITLE = 'FINALIZAÇÃO';
 
 // Status aceitos
