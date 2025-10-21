@@ -167,6 +167,111 @@ async function checkProjetos(itemId) {
   }
 }
 
+// Função para verificar arquivos na coluna DOCUMENTAÇÃO
+async function checkDocumentacao(itemId) {
+  try {
+    console.log(`📁 Verificando arquivos na coluna DOCUMENTAÇÃO do item ${itemId}`);
+    
+    const query = `query {
+      items(ids: ${itemId}) {
+        id
+        name
+        column_values {
+          id
+          column {
+            title
+          }
+          value
+          text
+        }
+      }
+    }`;
+    
+    const data = await gql(query);
+    
+    if (!data.items || data.items.length === 0) {
+      console.log('❌ Item não encontrado');
+      return null;
+    }
+    
+    const item = data.items[0];
+    
+    // Encontrar a coluna DOCUMENTAÇÃO
+    const documentacaoColumn = item.column_values.find(col => 
+      col.column && col.column.title === 'DOCUMENTAÇÃO'
+    );
+    
+    if (!documentacaoColumn) {
+      console.log('❌ Coluna DOCUMENTAÇÃO não encontrada');
+      return {
+        itemName: item.name,
+        hasDocumentacaoColumn: false,
+        files: []
+      };
+    }
+    
+    console.log('✅ Coluna DOCUMENTAÇÃO encontrada');
+    console.log(`📊 Valor da coluna: ${documentacaoColumn.value}`);
+    console.log(`📊 Texto da coluna: ${documentacaoColumn.text}`);
+    
+    // Extrair informações dos arquivos do campo value
+    let files = [];
+    
+    if (documentacaoColumn.value) {
+      try {
+        const valueObj = JSON.parse(documentacaoColumn.value);
+        
+        if (valueObj.files && Array.isArray(valueObj.files)) {
+          files = valueObj.files;
+          console.log(`📊 Encontrados ${files.length} arquivo(s) via campo value (files array)`);
+        } else if (Array.isArray(valueObj)) {
+          files = valueObj;
+          console.log(`📊 Encontrados ${files.length} arquivo(s) via campo value (direct array)`);
+        } else if (valueObj.assets && Array.isArray(valueObj.assets)) {
+          files = valueObj.assets;
+          console.log(`📊 Encontrados ${files.length} arquivo(s) via campo value (assets)`);
+        }
+      } catch (e) {
+        console.log('ℹ️  Não foi possível extrair arquivos do campo value como JSON');
+      }
+    }
+    
+    // Garantir que temos informações básicas dos arquivos
+    const processedFiles = files.map(file => ({
+      id: file.id || file.assetId || file.asset_id || `file-${Date.now()}-${Math.random()}`,
+      name: file.name || file.file_name || file.filename || 'arquivo_sem_nome',
+      url: file.url || ''
+    }));
+    
+    // Verificar condições específicas dos arquivos
+    const hasMatrPdf = processedFiles.some(file => 
+      file.name && 
+      file.name.toLowerCase().startsWith('matr') && 
+      file.name.toLowerCase().endsWith('.pdf')
+    );
+    
+    // Formatar resposta
+    const result = {
+      itemName: item.name,
+      hasDocumentacaoColumn: true,
+      totalFiles: processedFiles.length,
+      files: processedFiles,
+      fileNames: processedFiles.map(file => file.name),
+      hasMatrPdf: hasMatrPdf,
+      conditionMet: hasMatrPdf
+    };
+    
+    console.log(`📋 Arquivos encontrados: ${result.fileNames.join(', ')}`);
+    console.log(`📊 Condição MATR*.pdf: ${hasMatrPdf}`);
+    
+    return result;
+    
+  } catch (error) {
+    console.error('❌ Erro ao verificar documentação:', error);
+    throw error;
+  }
+}
+
 // Função para buscar subitens pelo nome (com busca flexível)
 async function findSubitemByName(parentItemId, subitemName) {
   try {
@@ -396,6 +501,77 @@ async function processProjetosWebhook(body) {
   }
 }
 
+// Processar webhook do Monday para DOCUMENTAÇÃO
+async function processDocumentacaoWebhook(body) {
+  console.log('📦 Webhook DOCUMENTAÇÃO recebido - Iniciando processamento...');
+  
+  try {
+    const event = body.event;
+    const itemId = event.pulseId;
+    
+    if (!itemId) {
+      console.log('❌ Item ID não encontrado no evento');
+      return;
+    }
+    
+    console.log(`🔍 Processando item: ${itemId}`);
+    
+    // 1. Verificar os arquivos na coluna DOCUMENTAÇÃO
+    const documentacaoInfo = await checkDocumentacao(itemId);
+    
+    if (!documentacaoInfo || !documentacaoInfo.hasDocumentacaoColumn) {
+      console.log('❌ Informações de documentação não disponíveis');
+      return;
+    }
+    
+    console.log(`📊 RESUMO DOCUMENTAÇÃO:`);
+    console.log(`   Item: ${documentacaoInfo.itemName}`);
+    console.log(`   Total de arquivos: ${documentacaoInfo.totalFiles}`);
+    console.log(`   Tem MATR*.pdf: ${documentacaoInfo.hasMatrPdf}`);
+    
+    if (documentacaoInfo.totalFiles > 0) {
+      console.log(`   Arquivos: ${documentacaoInfo.fileNames.join(', ')}`);
+    }
+    
+    // 2. Verificar condições: arquivo MATR*.pdf
+    if (documentacaoInfo.conditionMet) {
+      console.log('🎯 CONDIÇÃO ATENDIDA: Arquivo MATR*.pdf encontrado');
+      
+      // 3. Procurar o subitem "DOC - AB MATRICULA" (com busca flexível)
+      const subitemInfo = await findSubitemByName(itemId, 'DOC - AB MATRICULA');
+      
+      if (subitemInfo && subitemInfo.subitem && subitemInfo.concluidoColumn) {
+        console.log('✅ Subitem e coluna CONCLUIDO encontrados');
+        
+        // 4. Marcar a coluna CONCLUIDO como verdadeira
+        await markConcluido(
+          subitemInfo.subitem.id,
+          subitemInfo.subitem.board.id,
+          subitemInfo.concluidoColumn.column.id
+        );
+        
+        console.log('🎉 PROCESSO CONCLUÍDO: Subitem DOC - AB MATRICULA marcado como CONCLUIDO!');
+        
+      } else {
+        console.log('❌ Subitem DOC - AB MATRICULA ou coluna CONCLUIDO não encontrados');
+        if (subitemInfo && subitemInfo.subitem && !subitemInfo.concluidoColumn) {
+          console.log('⚠️  Subitem encontrado mas coluna CONCLUIDO não existe');
+        }
+      }
+      
+    } else {
+      console.log('ℹ️  Condição não atendida:');
+      console.log(`   - Esperado: MATR*.pdf | Encontrado: ${documentacaoInfo.hasMatrPdf}`);
+    }
+    
+    console.log('✅ Processamento do webhook DOCUMENTAÇÃO concluído!');
+    
+  } catch (error) {
+    console.error('❌ Erro ao processar webhook DOCUMENTAÇÃO:', error);
+    console.error('Stack trace:', error.stack);
+  }
+}
+
 // Rota webhook principal
 app.post('/webhook', (req, res) => {
   console.log('📍 POST /webhook recebido');
@@ -411,18 +587,23 @@ app.post('/webhook', (req, res) => {
   console.log('✅ Respondendo 200 OK para Monday');
   res.status(200).json({ ok: true, boot: BOOT_ID, received: true });
   
-  // Processar o webhook em segundo plano apenas se for da coluna PROJETOS
+  // Processar o webhook em segundo plano baseado na coluna
   if (body.event && body.event.columnTitle === 'PROJETOS') {
     console.log('🔄 Iniciando processamento PROJETOS em background...');
     processProjetosWebhook(body).catch(error => {
       console.error('💥 Erro não tratado no processamento do webhook:', error);
     });
+  } else if (body.event && body.event.columnTitle === 'DOCUMENTAÇÃO') {
+    console.log('🔄 Iniciando processamento DOCUMENTAÇÃO em background...');
+    processDocumentacaoWebhook(body).catch(error => {
+      console.error('💥 Erro não tratado no processamento do webhook:', error);
+    });
   } else {
-    console.log('ℹ️  Webhook não é da coluna PROJETOS, ignorando...');
+    console.log('ℹ️  Webhook não é das colunas PROJETOS ou DOCUMENTAÇÃO, ignorando...');
   }
 });
 
-// Rota para teste manual
+// Rota para teste manual PROJETOS
 app.post('/test-projetos', async (req, res) => {
   try {
     console.log('📍 POST /test-projetos recebido');
@@ -467,6 +648,55 @@ app.post('/test-projetos', async (req, res) => {
     
   } catch (error) {
     console.error('❌ Erro em /test-projetos:', error);
+    res.status(500).json({ error: 'Erro interno do servidor' });
+  }
+});
+
+// Rota para teste manual DOCUMENTAÇÃO
+app.post('/test-documentacao', async (req, res) => {
+  try {
+    console.log('📍 POST /test-documentacao recebido');
+    const { itemId } = req.body;
+    
+    if (!itemId) {
+      return res.status(400).json({ error: 'itemId é obrigatório' });
+    }
+    
+    // Simular o processamento completo
+    const result = {
+      itemId: itemId,
+      steps: []
+    };
+    
+    // 1. Verificar documentação
+    const documentacaoInfo = await checkDocumentacao(itemId);
+    result.documentacaoInfo = documentacaoInfo;
+    result.steps.push('Verificação de documentação concluída');
+    
+    if (documentacaoInfo && documentacaoInfo.hasDocumentacaoColumn) {
+      // 2. Verificar condições
+      const conditionMet = documentacaoInfo.conditionMet;
+      result.conditionMet = conditionMet;
+      result.steps.push(`Condição atendida: ${conditionMet}`);
+      
+      if (conditionMet) {
+        // 3. Buscar subitem
+        const subitemInfo = await findSubitemByName(itemId, 'DOC - AB MATRICULA');
+        result.subitemInfo = subitemInfo;
+        result.steps.push('Busca por subitem concluída');
+        
+        if (subitemInfo && subitemInfo.subitem && subitemInfo.concluidoColumn) {
+          // 4. Marcar como concluído (apenas em teste não executa de verdade)
+          result.steps.push('SIMULAÇÃO: Subitem seria marcado como CONCLUIDO');
+          result.wouldMarkConcluido = true;
+        }
+      }
+    }
+    
+    res.json(result);
+    
+  } catch (error) {
+    console.error('❌ Erro em /test-documentacao:', error);
     res.status(500).json({ error: 'Erro interno do servidor' });
   }
 });
