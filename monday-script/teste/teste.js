@@ -43,6 +43,22 @@ async function gql(query) {
   return data.data;
 }
 
+// Função para verificar se a coluna CONCLUIDO já está marcada
+function isAlreadyConcluido(concluidoColumn) {
+  if (!concluidoColumn || !concluidoColumn.value) {
+    return false;
+  }
+  
+  try {
+    const valueObj = JSON.parse(concluidoColumn.value);
+    // Verifica se é um objeto com checked=true ou se o valor é "true"
+    return (valueObj.checked === true) || (valueObj.checked === "true");
+  } catch (e) {
+    // Se não for JSON, verifica o texto
+    return concluidoColumn.text === 'true' || concluidoColumn.text === 'Sim' || concluidoColumn.text === '✅';
+  }
+}
+
 // Função para verificar arquivos na coluna PROJETOS
 async function checkProjetos(itemId) {
   try {
@@ -167,7 +183,7 @@ async function checkProjetos(itemId) {
   }
 }
 
-// Função para verificar arquivos na coluna DOCUMENTAÇÃO (ATUALIZADA)
+// Função para verificar arquivos na coluna DOCUMENTAÇÃO
 async function checkDocumentacao(itemId) {
   try {
     console.log(`📁 Verificando arquivos na coluna DOCUMENTAÇÃO do item ${itemId}`);
@@ -243,7 +259,7 @@ async function checkDocumentacao(itemId) {
       url: file.url || ''
     }));
     
-    // Verificar condições específicas dos arquivos (ATUALIZADO)
+    // Verificar condições específicas dos arquivos
     const hasMatrPdf = processedFiles.some(file => 
       file.name && 
       file.name.toLowerCase().startsWith('matr') && 
@@ -262,19 +278,28 @@ async function checkDocumentacao(itemId) {
       file.name.toLowerCase().endsWith('.pdf')
     );
     
-    // Determinar qual condição foi atendida e qual subitem procurar
-    let targetSubitemName = null;
-    let conditionType = null;
+    // Criar array de todas as condições atendidas
+    const conditions = [];
     
     if (hasMatrPdf) {
-      targetSubitemName = 'DOC - AB MATRICULA';
-      conditionType = 'MATR';
-    } else if (hasAlvarPdf) {
-      targetSubitemName = 'DOC - EMITIR ALVARÁ';
-      conditionType = 'ALVAR';
-    } else if (hasHabitePdf) {
-      targetSubitemName = 'DOC - HABITE-SE IMÓVEL';
-      conditionType = 'HABITE';
+      conditions.push({
+        type: 'MATR',
+        subitemName: 'DOC - AB MATRICULA'
+      });
+    }
+    
+    if (hasAlvarPdf) {
+      conditions.push({
+        type: 'ALVAR', 
+        subitemName: 'DOC - EMITIR ALVARÁ'
+      });
+    }
+    
+    if (hasHabitePdf) {
+      conditions.push({
+        type: 'HABITE',
+        subitemName: 'DOC - HABITE-SE IMÓVEL'
+      });
     }
     
     // Formatar resposta
@@ -287,17 +312,13 @@ async function checkDocumentacao(itemId) {
       hasMatrPdf: hasMatrPdf,
       hasAlvarPdf: hasAlvarPdf,
       hasHabitePdf: hasHabitePdf,
-      conditionMet: hasMatrPdf || hasAlvarPdf || hasHabitePdf,
-      targetSubitemName: targetSubitemName,
-      conditionType: conditionType
+      conditions: conditions,
+      conditionMet: conditions.length > 0
     };
     
     console.log(`📋 Arquivos encontrados: ${result.fileNames.join(', ')}`);
-    console.log(`📊 Condições:`);
-    console.log(`   - MATR*.pdf: ${hasMatrPdf}`);
-    console.log(`   - ALVAR*.pdf: ${hasAlvarPdf}`);
-    console.log(`   - HABITE*.pdf: ${hasHabitePdf}`);
-    console.log(`   - Subitem alvo: ${targetSubitemName}`);
+    console.log(`📊 Condições atendidas: ${conditions.map(c => c.type).join(', ')}`);
+    console.log(`📊 Subitens a processar: ${conditions.map(c => c.subitemName).join(', ')}`);
     
     return result;
     
@@ -502,7 +523,14 @@ async function processProjetosWebhook(body) {
       const subitemInfo = await findSubitemByName(itemId, 'EXE. PROJETO');
       
       if (subitemInfo && subitemInfo.subitem && subitemInfo.concluidoColumn) {
-        console.log('✅ Subitem e coluna CONCLUIDO encontrados');
+        // VERIFICAR SE JÁ ESTÁ MARCADO COMO CONCLUIDO
+        if (isAlreadyConcluido(subitemInfo.concluidoColumn)) {
+          console.log(`⏭️  Subitem EXE. PROJETO JÁ ESTÁ CONCLUÍDO, ignorando...`);
+          console.log('✅ Processamento do webhook PROJETOS concluído (já estava concluído)!');
+          return;
+        }
+        
+        console.log('✅ Subitem e coluna CONCLUIDO encontrados (não concluído)');
         
         // 4. Marcar a coluna CONCLUIDO como verdadeira
         await markConcluido(
@@ -536,7 +564,7 @@ async function processProjetosWebhook(body) {
   }
 }
 
-// Processar webhook do Monday para DOCUMENTAÇÃO (ATUALIZADA)
+// Processar webhook do Monday para DOCUMENTAÇÃO
 async function processDocumentacaoWebhook(body) {
   console.log('📦 Webhook DOCUMENTAÇÃO recebido - Iniciando processamento...');
   
@@ -570,38 +598,60 @@ async function processDocumentacaoWebhook(body) {
       console.log(`   Arquivos: ${documentacaoInfo.fileNames.join(', ')}`);
     }
     
-    // 2. Verificar condições e processar conforme o tipo de arquivo
-    if (documentacaoInfo.conditionMet && documentacaoInfo.targetSubitemName) {
-      console.log(`🎯 CONDIÇÃO ATENDIDA: Arquivo ${documentacaoInfo.conditionType}*.pdf encontrado`);
-      console.log(`🎯 Subitem alvo: ${documentacaoInfo.targetSubitemName}`);
+    // 2. Verificar condições e processar TODOS os subitens correspondentes
+    if (documentacaoInfo.conditionMet) {
+      console.log(`🎯 CONDIÇÕES ATENDIDAS: ${documentacaoInfo.conditions.map(c => c.type).join(', ')}`);
       
-      // 3. Procurar o subitem correspondente (com busca flexível)
-      const subitemInfo = await findSubitemByName(itemId, documentacaoInfo.targetSubitemName);
+      let processedCount = 0;
+      let skippedCount = 0;
       
-      if (subitemInfo && subitemInfo.subitem && subitemInfo.concluidoColumn) {
-        console.log('✅ Subitem e coluna CONCLUIDO encontrados');
+      // 3. Processar CADA condição encontrada
+      for (const condition of documentacaoInfo.conditions) {
+        console.log(`🔄 Processando condição: ${condition.type} -> ${condition.subitemName}`);
         
-        // 4. Marcar a coluna CONCLUIDO como verdadeira
-        await markConcluido(
-          subitemInfo.subitem.id,
-          subitemInfo.subitem.board.id,
-          subitemInfo.concluidoColumn.column.id
-        );
+        // Procurar o subitem correspondente
+        const subitemInfo = await findSubitemByName(itemId, condition.subitemName);
         
-        console.log(`🎉 PROCESSO CONCLUÍDO: Subitem ${documentacaoInfo.targetSubitemName} marcado como CONCLUIDO!`);
-        
-      } else {
-        console.log(`❌ Subitem ${documentacaoInfo.targetSubitemName} ou coluna CONCLUIDO não encontrados`);
-        if (subitemInfo && subitemInfo.subitem && !subitemInfo.concluidoColumn) {
-          console.log('⚠️  Subitem encontrado mas coluna CONCLUIDO não existe');
+        if (subitemInfo && subitemInfo.subitem && subitemInfo.concluidoColumn) {
+          // VERIFICAR SE JÁ ESTÁ MARCADO COMO CONCLUIDO
+          if (isAlreadyConcluido(subitemInfo.concluidoColumn)) {
+            console.log(`⏭️  Subitem ${condition.subitemName} JÁ ESTÁ CONCLUÍDO, ignorando...`);
+            skippedCount++;
+            continue; // Pula para o próximo
+          }
+          
+          console.log('✅ Subitem e coluna CONCLUIDO encontrados (não concluído)');
+          
+          // Marcar a coluna CONCLUIDO como verdadeira
+          await markConcluido(
+            subitemInfo.subitem.id,
+            subitemInfo.subitem.board.id,
+            subitemInfo.concluidoColumn.column.id
+          );
+          
+          console.log(`✅ Subitem ${condition.subitemName} marcado como CONCLUIDO!`);
+          processedCount++;
+          
+        } else {
+          console.log(`❌ Subitem ${condition.subitemName} ou coluna CONCLUIDO não encontrados`);
         }
+      }
+      
+      if (processedCount > 0) {
+        console.log(`🎉 PROCESSO CONCLUÍDO: ${processedCount} subitem(s) marcado(s) como CONCLUIDO!`);
+      }
+      if (skippedCount > 0) {
+        console.log(`⏭️  ${skippedCount} subitem(s) já estavam CONCLUÍDOS e foram ignorados.`);
+      }
+      if (processedCount === 0 && skippedCount === 0) {
+        console.log('⚠️  Nenhum subitem pôde ser processado');
       }
       
     } else {
       console.log('ℹ️  Nenhuma condição atendida:');
-      console.log(`   - Esperado: MATR*.pdf | Encontrado: ${documentacaoInfo.hasMatrPdf}`);
-      console.log(`   - Esperado: ALVAR*.pdf | Encontrado: ${documentacaoInfo.hasAlvarPdf}`);
-      console.log(`   - Esperado: HABITE*.pdf | Encontrado: ${documentacaoInfo.hasHabitePdf}`);
+      console.log(`   - MATR*.pdf: ${documentacaoInfo.hasMatrPdf}`);
+      console.log(`   - ALVAR*.pdf: ${documentacaoInfo.hasAlvarPdf}`);
+      console.log(`   - HABITE*.pdf: ${documentacaoInfo.hasHabitePdf}`);
     }
     
     console.log('✅ Processamento do webhook DOCUMENTAÇÃO concluído!');
@@ -677,9 +727,17 @@ app.post('/test-projetos', async (req, res) => {
         result.steps.push('Busca por subitem concluída');
         
         if (subitemInfo && subitemInfo.subitem && subitemInfo.concluidoColumn) {
-          // 4. Marcar como concluído (apenas em teste não executa de verdade)
-          result.steps.push('SIMULAÇÃO: Subitem seria marcado como CONCLUIDO');
-          result.wouldMarkConcluido = true;
+          // Verificar se já está concluído
+          const alreadyConcluido = isAlreadyConcluido(subitemInfo.concluidoColumn);
+          result.alreadyConcluido = alreadyConcluido;
+          result.steps.push(`Subitem já concluído: ${alreadyConcluido}`);
+          
+          if (!alreadyConcluido) {
+            result.steps.push('SIMULAÇÃO: Subitem seria marcado como CONCLUIDO');
+            result.wouldMarkConcluido = true;
+          } else {
+            result.steps.push('SIMULAÇÃO: Subitem já está CONCLUIDO, nenhuma ação necessária');
+          }
         }
       }
     }
@@ -720,15 +778,26 @@ app.post('/test-documentacao', async (req, res) => {
       result.steps.push(`Condição atendida: ${conditionMet}`);
       
       if (conditionMet) {
-        // 3. Buscar subitem
-        const subitemInfo = await findSubitemByName(itemId, documentacaoInfo.targetSubitemName);
-        result.subitemInfo = subitemInfo;
-        result.steps.push('Busca por subitem concluída');
+        result.steps.push(`Condições específicas: ${documentacaoInfo.conditions.map(c => c.type).join(', ')}`);
         
-        if (subitemInfo && subitemInfo.subitem && subitemInfo.concluidoColumn) {
-          // 4. Marcar como concluído (apenas em teste não executa de verdade)
-          result.steps.push('SIMULAÇÃO: Subitem seria marcado como CONCLUIDO');
-          result.wouldMarkConcluido = true;
+        // Simular processamento de cada condição
+        for (const condition of documentacaoInfo.conditions) {
+          const subitemInfo = await findSubitemByName(itemId, condition.subitemName);
+          result[`subitem_${condition.type}`] = subitemInfo;
+          result.steps.push(`Busca por ${condition.subitemName} concluída`);
+          
+          if (subitemInfo && subitemInfo.subitem && subitemInfo.concluidoColumn) {
+            const alreadyConcluido = isAlreadyConcluido(subitemInfo.concluidoColumn);
+            result[`alreadyConcluido_${condition.type}`] = alreadyConcluido;
+            result.steps.push(`Subitem ${condition.subitemName} já concluído: ${alreadyConcluido}`);
+            
+            if (!alreadyConcluido) {
+              result.steps.push(`SIMULAÇÃO: ${condition.subitemName} seria marcado como CONCLUIDO`);
+              result[`wouldMarkConcluido_${condition.type}`] = true;
+            } else {
+              result.steps.push(`SIMULAÇÃO: ${condition.subitemName} já está CONCLUIDO, nenhuma ação necessária`);
+            }
+          }
         }
       }
     }
