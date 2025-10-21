@@ -167,7 +167,7 @@ async function checkProjetos(itemId) {
   }
 }
 
-// Função para verificar arquivos na coluna DOCUMENTAÇÃO
+// Função para verificar arquivos na coluna DOCUMENTAÇÃO (ATUALIZADA)
 async function checkDocumentacao(itemId) {
   try {
     console.log(`📁 Verificando arquivos na coluna DOCUMENTAÇÃO do item ${itemId}`);
@@ -243,12 +243,39 @@ async function checkDocumentacao(itemId) {
       url: file.url || ''
     }));
     
-    // Verificar condições específicas dos arquivos
+    // Verificar condições específicas dos arquivos (ATUALIZADO)
     const hasMatrPdf = processedFiles.some(file => 
       file.name && 
       file.name.toLowerCase().startsWith('matr') && 
       file.name.toLowerCase().endsWith('.pdf')
     );
+    
+    const hasAlvarPdf = processedFiles.some(file => 
+      file.name && 
+      file.name.toLowerCase().startsWith('alvar') && 
+      file.name.toLowerCase().endsWith('.pdf')
+    );
+    
+    const hasHabitePdf = processedFiles.some(file => 
+      file.name && 
+      file.name.toLowerCase().startsWith('habite') && 
+      file.name.toLowerCase().endsWith('.pdf')
+    );
+    
+    // Determinar qual condição foi atendida e qual subitem procurar
+    let targetSubitemName = null;
+    let conditionType = null;
+    
+    if (hasMatrPdf) {
+      targetSubitemName = 'DOC - AB MATRICULA';
+      conditionType = 'MATR';
+    } else if (hasAlvarPdf) {
+      targetSubitemName = 'DOC - EMITIR ALVARÁ';
+      conditionType = 'ALVAR';
+    } else if (hasHabitePdf) {
+      targetSubitemName = 'DOC - HABITE-SE IMÓVEL';
+      conditionType = 'HABITE';
+    }
     
     // Formatar resposta
     const result = {
@@ -258,11 +285,19 @@ async function checkDocumentacao(itemId) {
       files: processedFiles,
       fileNames: processedFiles.map(file => file.name),
       hasMatrPdf: hasMatrPdf,
-      conditionMet: hasMatrPdf
+      hasAlvarPdf: hasAlvarPdf,
+      hasHabitePdf: hasHabitePdf,
+      conditionMet: hasMatrPdf || hasAlvarPdf || hasHabitePdf,
+      targetSubitemName: targetSubitemName,
+      conditionType: conditionType
     };
     
     console.log(`📋 Arquivos encontrados: ${result.fileNames.join(', ')}`);
-    console.log(`📊 Condição MATR*.pdf: ${hasMatrPdf}`);
+    console.log(`📊 Condições:`);
+    console.log(`   - MATR*.pdf: ${hasMatrPdf}`);
+    console.log(`   - ALVAR*.pdf: ${hasAlvarPdf}`);
+    console.log(`   - HABITE*.pdf: ${hasHabitePdf}`);
+    console.log(`   - Subitem alvo: ${targetSubitemName}`);
     
     return result;
     
@@ -501,7 +536,7 @@ async function processProjetosWebhook(body) {
   }
 }
 
-// Processar webhook do Monday para DOCUMENTAÇÃO
+// Processar webhook do Monday para DOCUMENTAÇÃO (ATUALIZADA)
 async function processDocumentacaoWebhook(body) {
   console.log('📦 Webhook DOCUMENTAÇÃO recebido - Iniciando processamento...');
   
@@ -528,17 +563,20 @@ async function processDocumentacaoWebhook(body) {
     console.log(`   Item: ${documentacaoInfo.itemName}`);
     console.log(`   Total de arquivos: ${documentacaoInfo.totalFiles}`);
     console.log(`   Tem MATR*.pdf: ${documentacaoInfo.hasMatrPdf}`);
+    console.log(`   Tem ALVAR*.pdf: ${documentacaoInfo.hasAlvarPdf}`);
+    console.log(`   Tem HABITE*.pdf: ${documentacaoInfo.hasHabitePdf}`);
     
     if (documentacaoInfo.totalFiles > 0) {
       console.log(`   Arquivos: ${documentacaoInfo.fileNames.join(', ')}`);
     }
     
-    // 2. Verificar condições: arquivo MATR*.pdf
-    if (documentacaoInfo.conditionMet) {
-      console.log('🎯 CONDIÇÃO ATENDIDA: Arquivo MATR*.pdf encontrado');
+    // 2. Verificar condições e processar conforme o tipo de arquivo
+    if (documentacaoInfo.conditionMet && documentacaoInfo.targetSubitemName) {
+      console.log(`🎯 CONDIÇÃO ATENDIDA: Arquivo ${documentacaoInfo.conditionType}*.pdf encontrado`);
+      console.log(`🎯 Subitem alvo: ${documentacaoInfo.targetSubitemName}`);
       
-      // 3. Procurar o subitem "DOC - AB MATRICULA" (com busca flexível)
-      const subitemInfo = await findSubitemByName(itemId, 'DOC - AB MATRICULA');
+      // 3. Procurar o subitem correspondente (com busca flexível)
+      const subitemInfo = await findSubitemByName(itemId, documentacaoInfo.targetSubitemName);
       
       if (subitemInfo && subitemInfo.subitem && subitemInfo.concluidoColumn) {
         console.log('✅ Subitem e coluna CONCLUIDO encontrados');
@@ -550,18 +588,20 @@ async function processDocumentacaoWebhook(body) {
           subitemInfo.concluidoColumn.column.id
         );
         
-        console.log('🎉 PROCESSO CONCLUÍDO: Subitem DOC - AB MATRICULA marcado como CONCLUIDO!');
+        console.log(`🎉 PROCESSO CONCLUÍDO: Subitem ${documentacaoInfo.targetSubitemName} marcado como CONCLUIDO!`);
         
       } else {
-        console.log('❌ Subitem DOC - AB MATRICULA ou coluna CONCLUIDO não encontrados');
+        console.log(`❌ Subitem ${documentacaoInfo.targetSubitemName} ou coluna CONCLUIDO não encontrados`);
         if (subitemInfo && subitemInfo.subitem && !subitemInfo.concluidoColumn) {
           console.log('⚠️  Subitem encontrado mas coluna CONCLUIDO não existe');
         }
       }
       
     } else {
-      console.log('ℹ️  Condição não atendida:');
+      console.log('ℹ️  Nenhuma condição atendida:');
       console.log(`   - Esperado: MATR*.pdf | Encontrado: ${documentacaoInfo.hasMatrPdf}`);
+      console.log(`   - Esperado: ALVAR*.pdf | Encontrado: ${documentacaoInfo.hasAlvarPdf}`);
+      console.log(`   - Esperado: HABITE*.pdf | Encontrado: ${documentacaoInfo.hasHabitePdf}`);
     }
     
     console.log('✅ Processamento do webhook DOCUMENTAÇÃO concluído!');
@@ -681,7 +721,7 @@ app.post('/test-documentacao', async (req, res) => {
       
       if (conditionMet) {
         // 3. Buscar subitem
-        const subitemInfo = await findSubitemByName(itemId, 'DOC - AB MATRICULA');
+        const subitemInfo = await findSubitemByName(itemId, documentacaoInfo.targetSubitemName);
         result.subitemInfo = subitemInfo;
         result.steps.push('Busca por subitem concluída');
         
