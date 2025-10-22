@@ -183,7 +183,7 @@ async function checkProjetos(itemId) {
   }
 }
 
-// Função para verificar arquivos na coluna DOCUMENTAÇÃO
+// Função para verificar arquivos na coluna DOCUMENTAÇÃO (ATUALIZADA)
 async function checkDocumentacao(itemId) {
   try {
     console.log(`📁 Verificando arquivos na coluna DOCUMENTAÇÃO do item ${itemId}`);
@@ -278,13 +278,18 @@ async function checkDocumentacao(itemId) {
       file.name.toLowerCase().endsWith('.pdf')
     );
     
-    // Criar array de todas as condições atendidas
+    // Criar array de todas as condições atendidas (ATUALIZADO)
     const conditions = [];
     
     if (hasMatrPdf) {
+      // MATR*.pdf agora marca DOIS subitens
       conditions.push({
         type: 'MATR',
         subitemName: 'DOC - AB MATRICULA'
+      });
+      conditions.push({
+        type: 'MATR',
+        subitemName: 'DOC - FAZER ESCRITURA'
       });
     }
     
@@ -783,17 +788,17 @@ app.post('/test-documentacao', async (req, res) => {
         // Simular processamento de cada condição
         for (const condition of documentacaoInfo.conditions) {
           const subitemInfo = await findSubitemByName(itemId, condition.subitemName);
-          result[`subitem_${condition.type}`] = subitemInfo;
+          result[`subitem_${condition.type}_${condition.subitemName.replace(/\s+/g, '_')}`] = subitemInfo;
           result.steps.push(`Busca por ${condition.subitemName} concluída`);
           
           if (subitemInfo && subitemInfo.subitem && subitemInfo.concluidoColumn) {
             const alreadyConcluido = isAlreadyConcluido(subitemInfo.concluidoColumn);
-            result[`alreadyConcluido_${condition.type}`] = alreadyConcluido;
+            result[`alreadyConcluido_${condition.type}_${condition.subitemName.replace(/\s+/g, '_')}`] = alreadyConcluido;
             result.steps.push(`Subitem ${condition.subitemName} já concluído: ${alreadyConcluido}`);
             
             if (!alreadyConcluido) {
               result.steps.push(`SIMULAÇÃO: ${condition.subitemName} seria marcado como CONCLUIDO`);
-              result[`wouldMarkConcluido_${condition.type}`] = true;
+              result[`wouldMarkConcluido_${condition.type}_${condition.subitemName.replace(/\s+/g, '_')}`] = true;
             } else {
               result.steps.push(`SIMULAÇÃO: ${condition.subitemName} já está CONCLUIDO, nenhuma ação necessária`);
             }
