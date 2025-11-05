@@ -41,7 +41,7 @@ const ACCEPT = [
   'vistoria', 'eng. sem clientes', 'siopi', 
 
 // 06 - Siopi:
-  'assinatura', 'enviar conformidade', 'conformidade', 'conforme', 'pend. siopi', 'pend. conformidade',
+  'assinatura', 'enviar conformidade', 'conformidade', 'conforme', 'pend. siopi', 'pend. conformidade', 'proposta',
 
   'atualizar matricula', 'matricula atualizada',
 
