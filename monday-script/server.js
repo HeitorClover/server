@@ -611,6 +611,8 @@ async function processEvent(body) {
 
     //Colocar Yasnnan
     if (statusText.toLowerCase().includes('siopi') ||
+        statusText.toLowerCase().includes('proposta') ||
+        statusText.toLowerCase().includes('pend. siopi') ||
         statusText.toLowerCase().includes('enviar conformidade')) {
         console.log(`> Atribuição do usuário 69227324 agendada para daqui a 5 segundos`);
         (async () => {
