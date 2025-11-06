@@ -46,7 +46,7 @@ const ACCEPT = [
   'atualizar matricula', 'matricula atualizada',
 
 // 07 - Assinatura de Contrato:
-  'solicitar minuta', 'editar minuta', 'minuta editada', 'contrado assinado', 'registro em cartório',
+  'solicitar minuta', 'editar minuta', 'minuta editada', 'contrado assinado', 'registro solicitado',
   'garantia', 'gar. conforme', 'gar. conforme aq',
 
 // 08 - Medições:
@@ -732,7 +732,7 @@ async function processEvent(body) {
           statusText.toLowerCase().includes('cartório/prefeitura') ||
           statusText.toLowerCase().includes('habite-se') ||
           statusText.toLowerCase().includes('enel') ||
-          statusText.toLowerCase().includes('registro em cartório') ||
+          statusText.toLowerCase().includes('registro solicitado') ||
           statusText.toLowerCase().includes('averbação cartório') ||
           statusText.toLowerCase().includes('habite-se aq') ||
           statusText.toLowerCase().includes('emitir alvará')) {
