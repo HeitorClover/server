@@ -43,7 +43,7 @@ const ACCEPT = [
 // 06 - Siopi:
   'assinatura', 'enviar conformidade', 'conformidade', 'conforme', 'pend. siopi', 'pend. conformidade', 'proposta',
 
-  'atualizar matricula', 'matricula atualizada',
+  'atualizar matricula','matricula solicitada', 'matricula atualizada',
 
 // 07 - Assinatura de Contrato:
   'solicitar minuta', 'editar minuta', 'minuta editada', 'contrado assinado', 'registro solicitado',
@@ -80,7 +80,8 @@ const EXCLUDED_SUBITEM_NAMES = [
   'CONTRATO DE COMPRA E VENDA',
   'DOC - HABITE-SE IMÓVEL',
   'DOC - HABITE-SE AQUISIÇÃO',
-  'DOC - AVERBAÇÃO CARTÓRIO'
+  'DOC - AVERBAÇÃO CARTÓRIO',
+  'DOC - MATRICULA SOLICITADA'
 ];
 
 // Status que só atribuem usuário (não colocam data/check)
@@ -96,7 +97,8 @@ const STATUS_ONLY_ASSIGN = [
   'cno',
   'scpo',
   'habite-se aq',
-  'averbação cartório'
+  'averbação cartório',
+  'matricula solicitada'
 ];
 
 console.log('--------------------------------------------');
@@ -728,6 +730,7 @@ async function processEvent(body) {
           statusText.toLowerCase().includes('doc - unificação') ||
           statusText.toLowerCase().includes('doc - desmembramento') ||
           statusText.toLowerCase().includes('atualizar matricula') ||
+          statusText.toLowerCase().includes('matricula solicitada') ||
           statusText.toLowerCase().includes('habite-se imóvel') ||
           statusText.toLowerCase().includes('cartório/prefeitura') ||
           statusText.toLowerCase().includes('habite-se') ||
