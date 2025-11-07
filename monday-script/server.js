@@ -47,7 +47,7 @@ const ACCEPT = [
 
 // 07 - Assinatura de Contrato:
   'solicitar minuta', 'editar minuta', 'minuta editada', 'contrado assinado', 'registro solicitado',
-  'garantia', 'gar. conforme', 'gar. conforme aq',
+  'enviar garantia','garantia enviada', 'gar. conforme', 'gar. conforme aq',
 
 // 08 - Medições:
   '1ª medição', '2ª medição', '3ª medição', '4ª medição', '5ª medição', '6ª medição', 'concluido',
@@ -651,7 +651,7 @@ async function processEvent(body) {
     }
 
     // Colocar Kailany
-    if (statusText.toLowerCase().includes('garantia')) {
+    if (statusText.toLowerCase().includes('enviar garantia')) {
       console.log(`> Atribuição do usuário 74134693 agendada para daqui a 5 segundos`);
       (async () => {
         await new Promise(res => setTimeout(res, 5 * 1000));
