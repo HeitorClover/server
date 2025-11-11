@@ -46,7 +46,7 @@ const ACCEPT = [
   'atualizar matricula','matricula solicitada', 'matricula atualizada',
 
 // 07 - Assinatura de Contrato:
-  'solicitar minuta', 'editar minuta', 'minuta editada', 'contrado assinado', 'registro solicitado',
+  'solicitar minuta', 'editar minuta', 'minuta editada', 'contrado assinado', 'registro solicitado', 'enviar para registro',
   'enviar garantia','garantia enviada', 'gar. conforme', 'gar. conforme aq',
 
 // 08 - Medições:
@@ -81,6 +81,7 @@ const EXCLUDED_SUBITEM_NAMES = [
   'DOC - HABITE-SE IMÓVEL',
   'DOC - HABITE-SE AQUISIÇÃO',
   'DOC - AVERBAÇÃO CARTÓRIO',
+  'DOC - ENVIAR PARA REGISTRO',
   'DOC - MATRICULA SOLICITADA'
 ];
 
@@ -98,7 +99,8 @@ const STATUS_ONLY_ASSIGN = [
   'scpo',
   'habite-se aq',
   'averbação cartório',
-  'matricula solicitada'
+  'matricula solicitada',
+  'enviar para registro'
 ];
 
 console.log('--------------------------------------------');
@@ -732,6 +734,7 @@ async function processEvent(body) {
           statusText.toLowerCase().includes('atualizar matricula') ||
           statusText.toLowerCase().includes('matricula solicitada') ||
           statusText.toLowerCase().includes('habite-se imóvel') ||
+          statusText.toLowerCase().includes('enviar para registro') ||
           statusText.toLowerCase().includes('cartório/prefeitura') ||
           statusText.toLowerCase().includes('habite-se') ||
           statusText.toLowerCase().includes('enel') ||
