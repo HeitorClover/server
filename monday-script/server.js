@@ -727,11 +727,11 @@ async function processEvent(body) {
     }
 
     // Colocar Henrique nos Documentos
+    // Colocar Henrique nos Documentos - MODIFICADO para "atualizar matricula"
     else if (statusText.toLowerCase().includes('ab matricula') ||
           statusText.toLowerCase().includes('fazer escritura') ||
           statusText.toLowerCase().includes('doc - unificação') ||
           statusText.toLowerCase().includes('doc - desmembramento') ||
-          statusText.toLowerCase().includes('atualizar matricula') ||
           statusText.toLowerCase().includes('matricula solicitada') ||
           statusText.toLowerCase().includes('habite-se imóvel') ||
           statusText.toLowerCase().includes('enviar para registro') ||
@@ -774,6 +774,38 @@ async function processEvent(body) {
         const { boardId: boardIdAfterDelay, cols: colsAfterDelay } = await getSubitemBoardAndColumns(targetSubitem.id);
         await assignUserToSubitem(targetSubitem.id, boardIdAfterDelay, colsAfterDelay, 69279625);
         console.log(`> Usuário 69279625 atribuído ao subitem ${targetSubitem.id} (${statusText})`);
+      })();
+    }
+
+    // NOVO BLOCO: Comportamento especial para "atualizar matricula"
+    else if (statusText.toLowerCase().includes('atualizar matricula')) {
+      
+      console.log(`> Status "atualizar matricula" detectado. Atribuição especial agendada - primeiro usuário 69279799, depois 69279625 após 5 segundos`);
+      
+      (async () => {
+        await new Promise(res => setTimeout(res, 5 * 1000));
+        
+        // Revalida qual é o último subitem após 5 segundos
+        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+          console.warn(`> Nenhum subitem encontrado após 5 segundos`);
+          return;
+        }
+        
+        // Para "atualizar matricula" usa o ÚLTIMO subitem
+        const targetSubitem = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+        console.log(`> Atribuindo ao ÚLTIMO subitem: "${targetSubitem.name}"`);
+        
+        const { boardId: boardIdAfterDelay, cols: colsAfterDelay } = await getSubitemBoardAndColumns(targetSubitem.id);
+        
+        // PRIMEIRO: Colocar usuário 69279799
+        await assignUserToSubitem(targetSubitem.id, boardIdAfterDelay, colsAfterDelay, 69279799);
+        console.log(`> PRIMEIRA ATRIBUIÇÃO: Usuário 69279799 atribuído ao subitem ${targetSubitem.id} (atualizar matricula)`);
+        
+        // SEGUNDO: Após mais 5 segundos, substituir pelo usuário normal (69279625)
+        await new Promise(res => setTimeout(res, 5 * 1000));
+        await assignUserToSubitem(targetSubitem.id, boardIdAfterDelay, colsAfterDelay, 69279625);
+        console.log(`> SEGUNDA ATRIBUIÇÃO: Usuário 69279625 atribuído ao subitem ${targetSubitem.id} (substituindo anterior)`);
       })();
     }
 
