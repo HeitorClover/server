@@ -52,7 +52,7 @@ const ACCEPT = [
 // 08 - Medições:
   '1ª medição', '2ª medição', '3ª medição', '4ª medição', '5ª medição', '6ª medição', 'concluido',
 
-  'habite-se aq', 'liberada', 'averbação cartório',
+  'habite-se aq', 'liberada', 'averbação cartório', 'pls', 'pls a fazer', 'pls feita',
 
 // Outros:
   'concluido', 'reanálise', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 
@@ -82,7 +82,8 @@ const EXCLUDED_SUBITEM_NAMES = [
   'DOC - HABITE-SE AQUISIÇÃO',
   'DOC - AVERBAÇÃO CARTÓRIO',
   'DOC - ENVIAR PARA REGISTRO',
-  'DOC - MATRICULA SOLICITADA'
+  'DOC - MATRICULA SOLICITADA',
+  'PLS - A FAZER'
 ];
 
 // Status que só atribuem usuário (não colocam data/check)
@@ -595,6 +596,7 @@ async function processEvent(body) {
         statusText.toLowerCase().includes('4ª medição') ||
         statusText.toLowerCase().includes('5ª medição') ||
         statusText.toLowerCase().includes('liberação final') ||
+        statusText.toLowerCase().includes('pls') ||
         statusText.toLowerCase().includes('concluido')) {
         console.log(`> Atribuição do usuário 69279574 agendada para daqui a 15 segundos`);
         (async () => {
