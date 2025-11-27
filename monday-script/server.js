@@ -14,14 +14,13 @@ if (!API_KEY) {
 
 const BOOT_ID = process.env.BOOT_ID || `boot-${Date.now()}`;
 
-
 const DATE_COL_TITLE = 'FINALIZAÇÃO';
 
 // Status aceitos
 const ACCEPT = [
 // 01 - Atendimento: 
   'abrir conta', 'documentos', 'caixaaqui', 'assinatura', 'conformidade', 'conta ativa', 
-  'comercial', 'doc pendente', 'restrição', 'avaliação', 'desist/demora',
+  'comercial', 'doc pendente', 'restrição', 'avaliação', 'desist/demora', 'habitação',
 
 // 02 - Avaliação:
   'aprovado', 'aprovados cb', 'condicionado', 'reprovado', 'analise', 'engenharia', 'projetos',  
@@ -463,6 +462,48 @@ async function changeParentItemStatus(itemId, newStatus) {
   }
 }
 
+// NOVA FUNÇÃO: Muda o Perfil do item pai para ATENDIMENTO
+async function changeParentItemProfile(itemId, newProfile) {
+  try {
+    // Primeiro obtém o board e colunas do item pai
+    const { boardId, cols } = await getItemBoardAndColumns(Number(itemId));
+    
+    // Encontra a coluna de Perfil (assumindo que se chama "Perfil" ou similar)
+    const profileCol = findColumn(cols, 'Perfil', 'status') || 
+                      findColumn(cols, 'perfil', 'status') ||
+                      findColumn(cols, 'Profile', 'status');
+    
+    if (!profileCol) {
+      console.warn(`> Coluna de Perfil não encontrada para o item pai ${itemId}`);
+      return false;
+    }
+
+    // Muda o perfil para ATENDIMENTO
+    const mutation = `mutation {
+        change_column_value(
+            board_id: ${boardId},
+            item_id: ${itemId},
+            column_id: "${profileCol.id}",
+            value: "{\\"label\\":\\"${newProfile}\\"}"
+        ) { id }
+    }`;
+
+    const res = await fetch('https://api.monday.com/v2', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: API_KEY },
+        body: JSON.stringify({ query: mutation })
+    });
+    
+    const json = await res.json();
+    console.log(`> Perfil do item pai ${itemId} alterado para "${newProfile}":`, JSON.stringify(json, null, 2));
+    return true;
+    
+  } catch (err) {
+    console.error(`> Erro ao alterar Perfil do item pai ${itemId}:`, err);
+    return false;
+  }
+}
+
 // Processa webhook
 async function processEvent(body) {
   const ev = body.event || {};
@@ -519,6 +560,17 @@ async function processEvent(body) {
       await applyStandardActions(lastSubitem.id, boardId, cols, statusText);
     } else {
       console.log(`> Subitem "${lastSubitem.name}" está na lista de exclusão ou o status é apenas de atribuição. Pulando data e check.`);
+    }
+
+    // NOVO BLOCO: Mudar Perfil para ATENDIMENTO quando status for "habitação"
+    if (statusText.toLowerCase().includes('habitação')) {
+      console.log(`> Status "habitação" detectado. Alteração do Perfil para ATENDIMENTO agendada para daqui a 15 segundos`);
+      
+      (async () => {
+        await new Promise(res => setTimeout(res, 15 * 1000));
+        await changeParentItemProfile(Number(itemId), 'ATENDIMENTO');
+        console.log(`> Perfil do item pai ${itemId} alterado para ATENDIMENTO`);
+      })();
     }
 
     // Colocar Maryanna ao abrir o.s.
