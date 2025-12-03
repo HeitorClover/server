@@ -54,7 +54,8 @@ const ACCEPT = [
   'habite-se aq', 'liberada', 'averbação cartório', 'pls', 'pls a fazer', 'pls feita',
 
 // Outros:
-  'concluido', 'reanálise', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 'siopi jn',
+  'concluido', 'reanálise', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 'siopi jn', 'pend. documentação', 'arquivo',
+  
 ];
 
 // Status que NÃO devem marcar a coluna CONCLUIDO
