@@ -37,7 +37,7 @@ const ACCEPT = [
   'scpo', 'cno',
 
 // 05 - Engenharia:
-  'vistoria', 'eng. sem clientes', 'siopi', 
+  'vistoria', 'eng. sem clientes', 'siopi', 'solicitada',
 
 // 06 - Siopi:
   'assinatura', 'enviar conformidade', 'conformidade', 'conforme', 'pend. siopi', 'pend. conformidade', 'proposta',
@@ -55,7 +55,7 @@ const ACCEPT = [
 
 // Outros:
   'concluido', 'reavaliação', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 'siopi jn', 'pend. documentação', 'arquivo',
-  'análise de crédito', 'siopi empr',
+  'análise de crédito', 'siopi empr', 'enviar conformidade empr',
 ];
 
 // Status que NÃO devem marcar a coluna CONCLUIDO
