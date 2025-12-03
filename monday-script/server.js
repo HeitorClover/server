@@ -54,7 +54,7 @@ const ACCEPT = [
   'habite-se aq', 'liberada', 'averbação cartório', 'pls', 'pls a fazer', 'pls feita',
 
 // Outros:
-  'concluido', 'reanálise', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 
+  'concluido', 'reanálise', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 'siopi jn',
 ];
 
 // Status que NÃO devem marcar a coluna CONCLUIDO
@@ -610,6 +610,26 @@ async function processEvent(body) {
         console.log(`> Usuário 90917412 atribuído ao subitem ${lastSubitemAfterDelay.id} (ab matricula)`);
       })();
     }  
+
+    //Colocar Laryssa JN
+    if (statusText.toLowerCase().includes('siopi jn')) {
+      console.log(`> Atribuição do usuário 72055302 agendada para daqui a 5 segundos`);
+      (async () => {
+        await new Promise(res => setTimeout(res, 5 * 1000));
+        
+        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+          console.warn(`> Nenhum subitem encontrado após 5 segundos`);
+          return;
+        }
+        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+        
+        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        await assignUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 72055302);
+        console.log(`> Usuário 90917412 atribuído ao subitem ${lastSubitemAfterDelay.id} (siopi jn)`);
+      })();
+    }  
+
 
     // ATUALIZADA: Colocar Yorrany Lopes Martins e depois remover
     if (statusText.toLowerCase().includes('aprovados cb') ||
