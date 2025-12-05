@@ -55,7 +55,7 @@ const ACCEPT = [
 
 // Outros:
   'concluido', 'reavaliação', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 'siopi jn', 'pend. documentação', 'arquivo',
-  'análise de crédito', 'siopi empr', 'enviar conformidade empr', 'a solicitar',
+  'análise de crédito', 'siopi empr', 'enviar conformidade empr', 'a solicitar', 'em andamento', 'feito',
 ];
 
 // Status que NÃO devem marcar a coluna CONCLUIDO
@@ -817,7 +817,6 @@ async function processEvent(body) {
           statusText.toLowerCase().includes('registro solicitado') ||
           statusText.toLowerCase().includes('averbação cartório') ||
           statusText.toLowerCase().includes('habite-se aq') ||
-          statusText.toLowerCase().includes('a solicitar') ||
           statusText.toLowerCase().includes('emitir alvará')) {
       
       console.log(`> Status "${statusText}" detectado. Atribuição do usuário 69279625 agendada para daqui a 5 segundos`);
@@ -851,6 +850,38 @@ async function processEvent(body) {
         const { boardId: boardIdAfterDelay, cols: colsAfterDelay } = await getSubitemBoardAndColumns(targetSubitem.id);
         await assignUserToSubitem(targetSubitem.id, boardIdAfterDelay, colsAfterDelay, 69279625);
         console.log(`> Usuário 69279625 atribuído ao subitem ${targetSubitem.id} (${statusText})`);
+      })();
+    }
+
+        // NOVO BLOCO: Colocar primeiro Maryanna e depois Henrique para "a solicitar"
+    else if (statusText.toLowerCase().includes('a solicitar')) {
+      
+      console.log(`> Status "a solicitar" detectado. Atribuição especial agendada - primeiro usuário 69279799 (Maryanna), depois 69279625 (Henrique) após 5 segundos`);
+      
+      (async () => {
+        await new Promise(res => setTimeout(res, 5 * 1000));
+        
+        // Revalida qual é o último subitem após 5 segundos
+        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
+        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
+          console.warn(`> Nenhum subitem encontrado após 5 segundos`);
+          return;
+        }
+        
+        // Para "a solicitar" usa o ÚLTIMO subitem
+        const targetSubitem = subitemsAfterDelay[subitemsAfterDelay.length - 1];
+        console.log(`> Atribuindo ao ÚLTIMO subitem: "${targetSubitem.name}"`);
+        
+        const { boardId: boardIdAfterDelay, cols: colsAfterDelay } = await getSubitemBoardAndColumns(targetSubitem.id);
+        
+        // PRIMEIRO: Colocar usuário 69279799 (Maryanna)
+        await assignUserToSubitem(targetSubitem.id, boardIdAfterDelay, colsAfterDelay, 69279799);
+        console.log(`> PRIMEIRA ATRIBUIÇÃO: Usuário 69279799 (Maryanna) atribuído ao subitem ${targetSubitem.id} (a solicitar)`);
+        
+        // SEGUNDO: Após mais 5 segundos, substituir pelo usuário 69279625 (Henrique)
+        await new Promise(res => setTimeout(res, 5 * 1000));
+        await assignUserToSubitem(targetSubitem.id, boardIdAfterDelay, colsAfterDelay, 69279625);
+        console.log(`> SEGUNDA ATRIBUIÇÃO: Usuário 69279625 (Henrique) atribuído ao subitem ${targetSubitem.id} (substituindo Maryanna)`);
       })();
     }
 
