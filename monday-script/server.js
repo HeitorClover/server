@@ -634,6 +634,7 @@ async function processEvent(body) {
 
     // ATUALIZADA: Colocar Yorrany Lopes Martins e depois remover
     if (statusText.toLowerCase().includes('aprovados cb') ||
+        statusText.toLowerCase().includes('solicitar minuta') ||
         statusText.toLowerCase().includes('projetos')) {
       console.log(`> Atribuição do usuário 69245814 agendada para daqui a 5 segundos`);
       (async () => {
@@ -712,13 +713,13 @@ async function processEvent(body) {
 
     //Colocar Hilgle Ferreira
     if (statusText.toLowerCase().includes('solicitar minuta')) {
-      console.log(`> Atribuição do usuário 70239350 agendada para daqui a 5 segundos`);
+      console.log(`> Atribuição do usuário 70239350 agendada para daqui a 13 segundos`);
       (async () => {
-        await new Promise(res => setTimeout(res, 5 * 1000));
+        await new Promise(res => setTimeout(res, 13 * 1000));
         
         const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
         if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
-          console.warn(`> Nenhum subitem encontrado após 5 segundos`);
+          console.warn(`> Nenhum subitem encontrado após 13 segundos`);
           return;
         }
         const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
