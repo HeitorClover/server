@@ -55,7 +55,7 @@ const ACCEPT = [
 
 // Outros:
   'concluido', 'reavaliação', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 'siopi jn', 'pend. documentação', 'arquivo',
-  'análise de crédito', 'siopi empr', 'enviar conformidade empr',
+  'análise de crédito', 'siopi empr', 'enviar conformidade empr', 'a solicitar',
 ];
 
 // Status que NÃO devem marcar a coluna CONCLUIDO
@@ -816,6 +816,7 @@ async function processEvent(body) {
           statusText.toLowerCase().includes('registro solicitado') ||
           statusText.toLowerCase().includes('averbação cartório') ||
           statusText.toLowerCase().includes('habite-se aq') ||
+          statusText.toLowerCase().includes('a solicitar') ||
           statusText.toLowerCase().includes('emitir alvará')) {
       
       console.log(`> Status "${statusText}" detectado. Atribuição do usuário 69279625 agendada para daqui a 5 segundos`);
