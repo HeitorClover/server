@@ -55,7 +55,7 @@ const ACCEPT = [
 
 // Outros:
   'concluido', 'reavaliação', 'cadastro', 'processos parados', 'assinatura de contrato', 'medições', 'siopi jn', 'pend. documentação', 'arquivo',
-  'análise de crédito', 'siopi empr', 'enviar conformidade empr', 'a solicitar', 'em andamento', 'feito',
+  'análise de crédito', 'siopi empr', 'enviar conformidade empr', 'a solicitar', 'em andamento', 'feito', 'cadastros pendentes',
 ];
 
 // Status que NÃO devem marcar a coluna CONCLUIDO
@@ -1012,4 +1012,5 @@ app.get('/', (_req, res) => res.send(`Servidor rodando — BOOT_ID: ${BOOT_ID}`)
 app.get('/webhook', (_req, res) => res.json({ status: 'ok', now: new Date().toISOString(), boot_id: BOOT_ID }));
 
 const PORT = process.env.PORT || 1000;
+
 app.listen(PORT, () => console.log(`🚀 Server rodando na porta ${PORT} — BOOT_ID: ${BOOT_ID}`));
