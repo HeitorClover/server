@@ -627,7 +627,7 @@ async function processEvent(body) {
         
         const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
         await assignUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 72055302);
-        console.log(`> Usuário 90917412 atribuído ao subitem ${lastSubitemAfterDelay.id} (siopi jn)`);
+        console.log(`> Usuário 72055302 atribuído ao subitem ${lastSubitemAfterDelay.id} (siopi jn)`);
       })();
     }  
 
@@ -656,38 +656,9 @@ async function processEvent(body) {
         // Espera mais 5 segundos e remove
         await new Promise(res => setTimeout(res, 5 * 1000));
         await removeUserFromSubitem(lastSubitemAfterDelay.id, boardId, cols);
-        console.log(`> Usuário 90917412 removido do subitem ${lastSubitemAfterDelay.id} (aprovados cb/projetos)`);
+        console.log(`> Usuário 69245814 removido do subitem ${lastSubitemAfterDelay.id} (aprovados cb/projetos)`);
       })();
     } 
-
-    //Colocar Brenda 
-    if (statusText.toLowerCase().includes('engenharia') ||
-        statusText.toLowerCase().includes('gar. conforme aq') ||
-        statusText.toLowerCase().includes('liberada') ||
-        statusText.toLowerCase().includes('1ª medição') ||
-        statusText.toLowerCase().includes('2ª medição') ||
-        statusText.toLowerCase().includes('3ª medição') ||
-        statusText.toLowerCase().includes('4ª medição') ||
-        statusText.toLowerCase().includes('5ª medição') ||
-        statusText.toLowerCase().includes('liberação final') ||
-        statusText.toLowerCase().includes('pls') ||
-        statusText.toLowerCase().includes('concluido')) {
-        console.log(`> Atribuição do usuário 69279574 agendada para daqui a 15 segundos`);
-        (async () => {
-        await new Promise(res => setTimeout(res, 15 * 1000));
-        
-        const subitemsAfterDelay = await getSubitemsOfItem(Number(itemId));
-        if (!subitemsAfterDelay || subitemsAfterDelay.length === 0) {
-          console.warn(`> Nenhum subitem encontrado após 15 segundos`);
-          return;
-        }
-        const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
-        
-        const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
-        await assignUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69279574);
-        console.log(`> Usuário 69279574 atribuído ao subitem ${lastSubitemAfterDelay.id} (engenharia)`);
-      })();
-    }
 
     //Colocar Yasnnan
     if (statusText.toLowerCase().includes('siopi') ||
