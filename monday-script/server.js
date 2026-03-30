@@ -684,7 +684,8 @@ async function processEvent(body) {
 
     //Colocar Hilgle Ferreira
     if (statusText.toLowerCase().includes('solicitar minuta')) {
-      console.log(`> Atribuição do usuário 70239350 agendada para daqui a 13 segundos`);
+      console.log(`> Atribuição dupla agendada para "solicitar minuta" - primeiro 69279574, depois 70239350 após 13 segundos`);
+      
       (async () => {
         await new Promise(res => setTimeout(res, 13 * 1000));
         
@@ -696,8 +697,15 @@ async function processEvent(body) {
         const lastSubitemAfterDelay = subitemsAfterDelay[subitemsAfterDelay.length - 1];
         
         const { boardId, cols } = await getSubitemBoardAndColumns(lastSubitemAfterDelay.id);
+        
+        // PRIMEIRO: Atribui usuário 69279574
+        await assignUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 69279574);
+        console.log(`> PRIMEIRA ATRIBUIÇÃO: Usuário 69279574 atribuído ao subitem ${lastSubitemAfterDelay.id} (solicitar minuta)`);
+        
+        // SEGUNDO: Após mais 13 segundos, substitui pelo usuário 70239350
+        await new Promise(res => setTimeout(res, 13 * 1000));
         await assignUserToSubitem(lastSubitemAfterDelay.id, boardId, cols, 70239350);
-        console.log(`> Usuário 70239350 atribuído ao subitem ${lastSubitemAfterDelay.id} (solicitar minuta)`);
+        console.log(`> SEGUNDA ATRIBUIÇÃO: Usuário 70239350 atribuído ao subitem ${lastSubitemAfterDelay.id} (substituindo 69279574)`);
       })();
     }
 
